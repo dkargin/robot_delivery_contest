@@ -1,10 +1,12 @@
 add_executable(robot_dispatcher
 	pathfinder.h
 	priority_heap.h
-	robot_dispatcher.cpp
+	dispatcher.h
+	dispatcher.cpp
 	problem_parser.h
 	problem_parser.cpp
 	svg.h
-	svg.cpp)
+	svg.cpp
+	draw.h)
 
 target_compile_definitions(robot_dispatcher PUBLIC -DLOG_STDIO)

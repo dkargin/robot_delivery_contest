@@ -134,6 +134,16 @@ public:
         return &m_grid[x + y * m_width];
     }
 
+    const Node* getNode(NodeID id) const
+    {
+        return &m_grid[id];
+    }
+
+    int getWidth() const
+    {
+        return m_width;
+    }
+
     void addAdjacentNodes(Node* from)
     {
         auto index = nodeIndex(from);

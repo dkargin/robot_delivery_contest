@@ -229,6 +229,16 @@ public:
             attrs << Attr("style", style);
     }
 
+    /// Draw a regular line.
+    void line(int x0, int y0, int x1, int y1, const char* style)
+    {
+        Tag tag(out(), "line");
+        auto&& attrs = tag.attrs();
+        attrs << Attr("x1", x0) << Attr("y1", y0) << Attr("x2", x1) << Attr("y2", y1);
+        if (style)
+            attrs << Attr("style", style);
+    }
+
     /// Define a reusable symbol
     /// @returns created tag. It should be captured using && object.
     Tag symbol(const char* name, int width, int height)

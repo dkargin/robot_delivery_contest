@@ -6,7 +6,7 @@
  */
 
 #include <vector>
-#include "draw_svg.h"
+#include "svg.h"
 
 
 std::vector<RGB> palette = {};
