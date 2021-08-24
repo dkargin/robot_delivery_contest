@@ -107,7 +107,6 @@ public:
         assert(m_state == State::ParsedRequestsNumber);
         int numOrders = 0;
         m_in >> numOrders;
-        requests.resize(numOrders);
         for (int i = 0; i < numOrders; i++)
         {
             auto order = std::make_unique<Order>();

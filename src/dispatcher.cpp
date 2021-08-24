@@ -1,4 +1,12 @@
 #include <fstream>
+#include <chrono>
+
+using Clock = std::chrono::steady_clock;
+
+auto MS(const Clock::time_point& from, const Clock::time_point& to)
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(to - from);
+}
 
 #include "problem_parser.h"
 
@@ -47,7 +55,6 @@ int main(int argc, const char* argv[])
         parser.getOrderPrice(), parser.getRobotPrice());
     dispatcher.publishInitialPositions();
 
-    // TODO: Process 
     for (int step = 0; step < parser.getMaxSteps(); step++)
     {
         // Calculate paths for each new request.
@@ -57,19 +64,24 @@ int main(int argc, const char* argv[])
         for (size_t o = dispatcher.orders.size() - added; o < dispatcher.orders.size(); o++)
         {
             Order& order = *dispatcher.orders[o];
+            auto timeStart = Clock::now();
             dispatcher.m_search.beginSearch();
             // Doing reverse search.
             dispatcher.m_search.addNode(order.finish.x, order.finish.y, 0);
             pred.target = order.start;
             auto result = dispatcher.m_search.runWave(pred);
             assert(result == SearchGrid::WaveResult::Goal);
+            auto timeEnd = Clock::now();
+            auto delta = MS(timeStart, timeEnd);
+#ifdef LOG_SVG
             char svgPath[255];
             std::snprintf(svgPath, sizeof(svgPath), "tree_%d.svg", (int)o);
             dumpPathfinder(dispatcher.m_search, svgPath);
+#endif
             order.path = std::make_unique<Path>();
             dispatcher.m_search.tracePath(order.start.x, order.start.y, order.path->points);
 #ifdef LOG_STDIO
-            std::cout << "Order #" << o << " length=" << order.distance() << std::endl;
+            std::cout << "Order #" << o << " length=" << order.distance() << " in " << delta.count() << "ms" << std::endl;
 #endif
         }
         // TODO: Calculate data.
