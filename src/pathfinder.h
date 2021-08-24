@@ -432,6 +432,7 @@ public:
     /// It returns reversed path.
     bool tracePath(Coord x, Coord y, std::vector<Point2>& path) const
     {
+        path.clear();
         const Node* current = getNode(x, y);
         int iteration = 0;
         while (current)
@@ -521,13 +522,15 @@ struct TargetSearchPredicate
     SearchGrid& grid;
 };
 
+/// A predicate for pathfinding task with multiple goals.
+/// isGoal will return true only when wave visits all specified targets.
 struct GroupSearchPredicate
 {
 
     GroupSearchPredicate(SearchGrid& grid) : grid(grid)
     {
         width = grid.getWidth();
-        mask.resize(width);
+        mask.resize(width * width);
     }
 
     /// Checks if specified position is masked.
@@ -564,6 +567,11 @@ struct GroupSearchPredicate
         if (isMasked(id))
             hits++;
         return hits == targets.size();
+    }
+
+    bool empty() const
+    {
+        return targets.empty();
     }
 
     SearchGrid& grid;

@@ -10,7 +10,7 @@ class Dispatcher
 {
 public:
     Dispatcher(Map& map)
-        :m_search(map), m_map(map)
+        :m_search(map), m_groupPred(m_search), m_map(map)
     {
 
     }
@@ -120,20 +120,77 @@ public:
                     << " trace in " << order.path.timeTrace.count() << std::endl;
 #endif
         }
-        // TODO: Find best robots for this task.
 
+        std::vector<int> robotCandidates;
+        robotCandidates.reserve(m_robots.size());
+        // Find best robots for this task.
+        // Using greedy algorithm for now.
         for (int i = 0; i < m_freeOrders.size(); i++)
         {
-            Order* order = m_orders[m_freeOrders[i]].get();
+            int orderId = m_freeOrders[i];
+            Order* order = m_orders[orderId].get();
             if (!order)
             {
-                // Swap and remove from list.
-                std::swap(m_freeOrders[i], m_freeOrders.back());
-                m_freeOrders.pop_back();
+                removeFreeOrder(i);
                 continue;
             }
 
+            m_groupPred.clear();
+            robotCandidates.clear();
+            for (int r = 0; r < m_robots.size(); r++)
+            {
+                const Robot& robot = m_robots[r];
+                // Skip robots which are occupied now.
+                if (!robot.orders.empty())
+                {
+                    // TODO: can queue tasks.
+                    continue;
+                }
+                m_groupPred.addTarget(robot.pos);
+                robotCandidates.push_back(r);
+            }
+
+            if (robotCandidates.empty())
+            {
+#ifdef LOG_STDIO
+                std::cout << "No free candidates for task " << orderId << std::endl;
+#endif
+                break;
+            }
+
+            m_search.beginSearch();
+            m_search.addNode(order->start.x, order->start.y, 0);
+            auto waveResult = m_search.runWave(m_groupPred);
+            if (waveResult == SearchGrid::WaveResult::Collapsed)
+                throw std::runtime_error("Multiwave has collapsed");
+
+            int nearestRobot = -1;
+            int nearestDistance = m_search.getWidth() * m_search.getWidth();
+            for (int r: robotCandidates)
+            {
+                Robot& robot = m_robots[r];
+                m_search.tracePath(robot.pos.x, robot.pos.y, robot.tmpPath);
+                int distance = robot.tmpPath.size();
+                if (distance < nearestDistance || nearestRobot == -1)
+                {
+                    nearestRobot = r;
+                    nearestDistance = distance;
+                }
+            }
+
+#ifdef LOG_STDIO
+            std::cout << "Assigning task " << orderId << " to robot " << nearestRobot << std::endl;
+#endif
+            m_robots[nearestRobot].orders.push_back(orderId);
+            removeFreeOrder(i);
         }
+    }
+
+    // Remove free order at specified index.
+    void removeFreeOrder(int i)
+    {
+        std::swap(m_freeOrders[i], m_freeOrders.back());
+        m_freeOrders.pop_back();
     }
 
     void publishInitialPositions()
@@ -164,6 +221,7 @@ public:
 
 protected:
     SearchGrid m_search;
+    GroupSearchPredicate m_groupPred;
     Map& m_map;
     std::vector<Robot> m_robots;
     // A list of IDs of free orders.

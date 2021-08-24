@@ -124,6 +124,8 @@ struct Robot {
     {
         commands.resize(60, Command::Idle);
     }
+
+    std::vector<Point2> tmpPath;
 };
 
 struct Map
