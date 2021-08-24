@@ -5,7 +5,259 @@
 #include <cassert>
 
 #include "state.h"
-#include "priority_heap.h"
+
+
+template <class NodeType> struct ContainerTraits;
+/// @brief Binary heap container that implements priority queue.
+template<class NodeType, class Traits_ = ContainerTraits<NodeType>>
+class SearchContainerBH
+{
+public:
+    using Traits = Traits_;
+    typedef std::vector<NodeType*> Array;
+
+    /// Creates container for specified max size
+    SearchContainerBH(size_t _size)
+    {
+        peak = 0;
+        nodesVisited = 0;
+        maxSize = _size;
+        array.reserve(_size);
+        size = 0;
+    }
+
+    /// @brief Check if node is already stored in container
+    bool contains(NodeType* node)
+    {
+        auto id = Traits::getID(node);
+        return (id >= 0 && id < array.size()) ? array[id] == node : false;
+    }
+
+    /// Get current size.
+    size_t getSize() const
+    {
+        return size;
+    }
+
+    size_t getMaxSize() const
+    {
+        return maxSize;
+    }
+
+    // @brief Add element to binary heap
+    bool push(NodeType* node)
+    {
+        assert(node != NULL);
+
+        if (this->size == maxSize)
+        {
+            return false;
+        }
+
+        size_t v = size;
+        size_t u = v;
+
+        int id = Traits::getID(node);
+
+        //check if node is already in container
+        if (id >= 0 && id < size && array[id] == node)
+        {
+            v = id;
+            u = v;
+            array[v] = node;
+        }
+        else
+        {
+            Traits::setID(node, v);
+            array.push_back(node);
+
+            nodesVisited++;
+            if (array.size() > peak)
+                peak = array.size();
+        }
+
+        while (v)
+        {
+            u = v / 2;
+
+            if (Traits::compare(array[u], array[v]))
+            {
+                NodeType* tmp = array[u];
+                array[u] = array[v];
+                array[v] = tmp;
+                //fix ID's
+                Traits::setID(array[u], u);
+                Traits::setID(array[v], v);
+                v = u;
+            }
+            else
+                break;
+        }
+        size = array.size();
+        return true;
+    }
+
+    // Removing first node
+    NodeType* pop()
+    {
+        // We swap first node with the last node, shrink and rebuild heap
+        unsigned int chLeft = 0;
+        unsigned int chRight = 0;
+        unsigned int u = 0;
+        unsigned int v = 0;
+
+        NodeType* res = array[0];
+        array[0] = array.back();
+
+        Traits::setID(array[0], 0);
+
+        array.pop_back();
+        size = array.size();
+
+        while (true)
+        {
+            u = v;
+            chLeft = u * 2 + 1;
+            chRight = u * 2 + 2;
+            if (chRight < size)
+            {
+                if (Traits::compare(array[u], array[chLeft]))
+                    v = chLeft;
+                if (Traits::compare(array[v], array[chRight]))
+                    v = chRight;
+            }
+            else if (chLeft < size)
+            {
+                if (Traits::compare(array[u], array[chLeft]))
+                    v = chLeft;
+            }
+            if (u != v)
+            {
+                NodeType* tmp = array[u];
+                array[u] = array[v];
+                array[v] = tmp;
+
+                //fix ID's
+                Traits::setID(array[u], u);
+                Traits::setID(array[v], v);
+            }
+            else
+                break;
+        }
+        return res;
+    }
+
+    NodeType* firstNode()
+    {
+        if (!array.empty())
+            return array.front();
+        return NULL;
+    }
+
+    NodeType* lastNode()
+    {
+        if (!array.empty())
+            return array.back();
+        return NULL;
+    }
+
+
+    /// remove Node from binary heap
+    void removeNode(NodeType* node)
+    {
+        assert(node != NULL);
+
+        long i = Traits::getID(node);
+        bool flag = false;// if we  have not found this node
+        // We cache array index for node
+        if (array[i] == node)
+        {
+            flag = true;
+        }
+        // Or we've failed to cache it, so we search this node manually
+        else
+        {
+            for (i = 0; i < size; i++)
+                if (node == array[i])
+                {
+                    flag = true;
+                    break;
+                }
+        }
+        if (!flag)
+            return;
+        // Swapping nodes
+        unsigned int chLeft = i;
+        unsigned int chRight = i;
+        unsigned int u = i;
+        unsigned int v = i;
+        size--;
+        array[i] = array[size];
+        Traits::setID(array[i], i);
+        array[size] = NULL;
+
+        while (true)
+        {
+            u = v;
+            chLeft = u * 2 + 1;
+            chRight = u * 2 + 2;;
+            if (2 * u + 2 < size)
+            {
+                if (Traits::compare(array[u], array[chLeft]))
+                    v = chLeft;
+                if (Traits::compare(array[v], array[chRight]))
+                    v = chRight;
+            }
+            else if (chLeft < size)
+            {
+                if (Traits::compare(array[u], array[chLeft]))
+                    v = chLeft;
+            }
+            if (u != v)
+            {
+                NodeType* tmp = array[u];
+                array[u] = array[v];
+                array[v] = tmp;
+
+                //fix ID's
+                Traits::setID(array[u], u);
+                Traits::setID(array[v], v);
+            }
+            else
+                break;
+        }
+    }
+
+    /// Remove all contents
+    void clear()
+    {
+        nodesVisited = 0;
+        peak = 0;
+        size = 0;
+
+        array.clear();
+    }
+
+    size_t getPeakSize() const
+    {
+        return peak;
+    }
+
+    size_t getSize()
+    {
+        return array.size();
+    }
+
+public:
+    // Current size of a heap.
+    size_t size;
+    // Max size of a heap.
+    size_t maxSize;
+    size_t peak;
+    // Number of nodes visited.
+    int nodesVisited;
+    Array array;
+};
 
 /// A from in a grid search.
 /// N < 2096 -> 11 bits. So we can limit cost to a N*N -> 22 bits
@@ -22,10 +274,13 @@ struct Node {
     uint32_t waveId = 0;
     /// Accumulated path cost.
     CostType cost = 0;
+    /// Heuristic estimate of a cost.
+    CostType estimate = 0;
 
     void reset()
     {
         cost = 0;
+        estimate = 0;
         parent = InvalidID;
     }
 };
@@ -37,7 +292,7 @@ template<> struct ContainerTraits<Node>
 
     static CostType getCost(const Node* a)
     {
-        return a->cost /* + a->estimateCost*/;
+        return a->cost + a->estimate;
     }
 
     /// Implements operator a > b
@@ -63,7 +318,7 @@ template<> struct ContainerTraits<Node>
  *   is further improved by intrusive index.
  * 2. Map is not cleared after/before the search. Instead we add special `waveId` marks to each
  *   from and increment it on every new search.
- * 3. Eliminated most of allocations in a search core. It is always
+ * 3. Eliminated most of allocations in a search core. It is always uses preallocated data.
  */
 class SearchGrid
 {
@@ -104,15 +359,11 @@ public:
         return node;
     }
 
-    // Clears all the contents of the grid.
+    /// Clears all the contents of the grid.
     void clearGrid()
     {
         for (auto& node: m_grid)
-        {
-            node.cost = 0;
-            node.parent = Node::InvalidID;
-            node.waveId = 0;
-        }
+            node.reset();
     }
     // Get index of a from.
     NodeID nodeIndex(const Node* node) const
@@ -183,12 +434,10 @@ public:
     {
         const Node* current = getNode(x, y);
         int iteration = 0;
-        std::vector<const Node*> trace;
         while (current)
         {
             auto pt = nodeCoords(current);
             path.push_back(pt);
-            trace.push_back(current);
             const Node* parent = nullptr;
             if (current->parent == Node::InvalidID)
                 break;
@@ -270,6 +519,59 @@ struct TargetSearchPredicate
     };
 
     SearchGrid& grid;
+};
+
+struct GroupSearchPredicate
+{
+
+    GroupSearchPredicate(SearchGrid& grid) : grid(grid)
+    {
+        width = grid.getWidth();
+        mask.resize(width);
+    }
+
+    /// Checks if specified position is masked.
+    bool isMasked(Node::ID id) const
+    {
+        return mask[id] != 0;
+    }
+
+    /// Clears search space.
+    void clear()
+    {
+        for (const auto& pt: targets)
+        {
+            mask[pt.x + pt.y * width] = 0;
+        }
+        targets.clear();
+        hits = 0;
+    }
+
+    /// Adds target to search space.
+    void addTarget(const Point2& pt)
+    {
+        Node::ID id = pt.x + pt.y * width;
+        if (!mask[id])
+        {
+            mask[id] = 1;
+            targets.push_back(pt);
+        }
+    }
+
+    bool isGoal(Node* node) const
+    {
+        auto id = grid.nodeIndex(node);
+        if (isMasked(id))
+            hits++;
+        return hits == targets.size();
+    }
+
+    SearchGrid& grid;
+    int width = 0;
+    std::vector<Point2> targets;
+    std::vector<char> mask;
+    mutable int hits = 0;
+
 };
 
 /// Estimated size of a single from = ~16 bytes.

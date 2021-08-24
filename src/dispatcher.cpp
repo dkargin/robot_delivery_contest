@@ -1,17 +1,9 @@
 #include <fstream>
-#include <chrono>
 
-using Clock = std::chrono::steady_clock;
-
-auto MS(const Clock::time_point& from, const Clock::time_point& to)
-{
-    return std::chrono::duration_cast<std::chrono::milliseconds>(to - from);
-}
 
 #include "problem_parser.h"
 
 #include "dispatcher.h"
-#include "draw.h"
 
 int main(int argc, const char* argv[])
 {
@@ -58,38 +50,18 @@ int main(int argc, const char* argv[])
     for (int step = 0; step < parser.getMaxSteps(); step++)
     {
         // Calculate paths for each new request.
-        int added = parser.parseStepRequests(dispatcher.orders, step);
+        int added = parser.parseStepRequests(dispatcher.m_orders, 60*step);
 
-        TargetSearchPredicate pred(dispatcher.m_search);
-        for (size_t o = dispatcher.orders.size() - added; o < dispatcher.orders.size(); o++)
-        {
-            Order& order = *dispatcher.orders[o];
-            auto timeStart = Clock::now();
-            dispatcher.m_search.beginSearch();
-            // Doing reverse search.
-            dispatcher.m_search.addNode(order.finish.x, order.finish.y, 0);
-            pred.target = order.start;
-            auto result = dispatcher.m_search.runWave(pred);
-            assert(result == SearchGrid::WaveResult::Goal);
-            auto timeEnd = Clock::now();
-            auto delta = MS(timeStart, timeEnd);
-#ifdef LOG_SVG
-            char svgPath[255];
-            std::snprintf(svgPath, sizeof(svgPath), "tree_%d.svg", (int)o);
-            dumpPathfinder(dispatcher.m_search, svgPath);
-#endif
-            order.path = std::make_unique<Path>();
-            dispatcher.m_search.tracePath(order.start.x, order.start.y, order.path->points);
-#ifdef LOG_STDIO
-            std::cout << "Order #" << o << " length=" << order.distance() << " in " << delta.count() << "ms" << std::endl;
-#endif
-        }
-        // TODO: Calculate data.
+        dispatcher.processNewOrders(added);
 
+        // Assign tasks to robots.
+        // TODO: for each task: find shortest path from task start to each of robots (or their finish points).
         for (int tick = 0; tick < 60; tick++)
         {
             // TODO: Make steps.
-            // TODO: Write steps for each robot.
         }
+
+        dispatcher.publishRobots();
     }
+    return 0;
 }

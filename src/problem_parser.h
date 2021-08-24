@@ -102,8 +102,9 @@ public:
     {
         return m_robotPrice;
     }
+
     /// Parses requests for a current step.
-    int parseStepRequests(std::vector<std::unique_ptr<Order>>& requests, int step) {
+    int parseStepRequests(std::vector<std::unique_ptr<Order>>& requests, int tick) {
         assert(m_state == State::ParsedRequestsNumber);
         int numOrders = 0;
         m_in >> numOrders;
@@ -116,7 +117,7 @@ public:
             order->start.y -= 1;
             order->finish.x -= 1;
             order->finish.y -= 1;
-            order->time = step;
+            order->time = tick;
             requests.push_back(std::move(order));
         }
         return numOrders;
