@@ -70,7 +70,7 @@ public:
     }
 
     /// Parses number of input requests and world steps.
-    bool parseRequestsHeader(std::vector<Order>& requests) {
+    bool parseRequestsHeader() {
         assert(m_state == State::ParsedMap);
         m_in >> m_numSteps >> m_numOrders;
         constexpr int maxSteps = 100000;
@@ -84,6 +84,46 @@ public:
 #endif
         m_state = State::ParsedRequestsNumber;
         return true;
+    }
+
+    int getMaxOrders() const
+    {
+        return m_numOrders;
+    }
+
+    int getOrderPrice() const
+    {
+        return m_maxTips;
+    }
+
+    int getMaxSteps() const
+    {
+        return m_numSteps;
+    }
+
+    int getRobotPrice() const
+    {
+        return m_robotPrice;
+    }
+    /// Parses requests for a current step.
+    int parseStepRequests(std::vector<std::unique_ptr<Order>>& requests, int step) {
+        assert(m_state == State::ParsedRequestsNumber);
+        int numOrders = 0;
+        m_in >> numOrders;
+        requests.resize(numOrders);
+        for (int i = 0; i < numOrders; i++)
+        {
+            auto order = std::make_unique<Order>();
+            m_in >> order->start.x >> order->start.y
+                >> order->finish.x >> order->finish.y;
+            order->start.x -= 1;
+            order->start.y -= 1;
+            order->finish.x -= 1;
+            order->finish.y -= 1;
+            order->time = step;
+            requests.push_back(std::move(order));
+        }
+        return numOrders;
     }
 
 protected:

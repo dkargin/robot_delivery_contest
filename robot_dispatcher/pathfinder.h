@@ -6,7 +6,7 @@
 #include "state.h"
 #include "priority_heap.h"
 
-/// A node in a grid search.
+/// A from in a grid search.
 /// N < 2096 -> 11 bits. So we can limit cost to a N*N -> 22 bits
 /// int32_t is enough to fit longest path. 
 /// The same for NodeId.
@@ -29,7 +29,7 @@ struct Node {
     }
 };
 
-/// Wraps access to specific node type
+/// Wraps access to specific from type
 template<> struct ContainerTraits<Node>
 {
     using CostType = Node::CostType;
@@ -61,7 +61,7 @@ template<> struct ContainerTraits<Node>
  * 1. Priority queue is implemented by a binary heap. Searches for position in tree
  *   is further improved by intrusive index.
  * 2. Map is not cleared after/before the search. Instead we add special `waveId` marks to each
- *   node and increment it on every new search.
+ *   from and increment it on every new search.
  * 3. Eliminated most of allocations in a search core. It is always
  */
 class SearchGrid
@@ -91,16 +91,11 @@ public:
         return m_lastWaveId;
     }
 
-    /// Adds node to search frontier.
+    /// Adds from to search frontier.
     Node* addNode(Coord x, Coord y, int cost, NodeID parentId = Node::InvalidID)
     {
-        Node* node = &m_grid[x + y * m_width];
+        Node* node = &m_grid[x + m_width * y];
         node->cost = cost;
-        if (parentId != Node::InvalidID)
-        {
-            auto parent = m_grid[parentId];
-            node->cost += parent.cost;
-        }
         node->parent = parentId;
         node->waveId = m_lastWaveId;
         m_priorityHeap.push(node);
@@ -112,7 +107,7 @@ public:
     {
         assert(false);
     }
-    // Get index of a node.
+    // Get index of a from.
     NodeID nodeIndex(const Node* node) const
     {
         return static_cast<NodeID>(node - &m_grid.front());
@@ -139,20 +134,22 @@ public:
         return &m_grid[x + y * m_width];
     }
 
-    void addAdjacentNodes(Node* node)
+    void addAdjacentNodes(Node* from)
     {
-        auto index = nodeIndex(node);
-        auto visitNode = [this, index, node](int x, int y)
+        auto index = nodeIndex(from);
+        auto visitNode = [this, index, from](int x, int y)
             {
                 constexpr int moveCost = 1;
+                int newCost = moveCost + from->cost;
                 if (isVisited(x, y))
                     return;
                 if (isOccupied(x, y))
                     return;
-                addNode(x, y, moveCost, index);
+                Node* node = &m_grid[x + y * m_width];
+                addNode(x, y, newCost, index);
             };
 
-        auto pt = nodeCoords(node);
+        auto pt = nodeCoords(from);
         if (pt.x > 0)
             visitNode(pt.x - 1, pt.y);
         if (pt.y > 0)
@@ -163,8 +160,37 @@ public:
             visitNode(pt.x, pt.y + 1);
     }
 
+    /// Trace back path from specified point.
+    /// It returns reversed path.
+    void tracePath(Coord x, Coord y, std::vector<Point2>& path) const
+    {
+        const Node* current = getNode(x, y);
+        int iteration = 0;
+        std::vector<const Node*> trace;
+        while (current)
+        {
+            auto pt = nodeCoords(current);
+            path.push_back(pt);
+            trace.push_back(current);
+            const Node* parent = nullptr;
+            if (current->parent == Node::InvalidID)
+                break;
+            parent = &m_grid[current->parent];
+            assert(parent != current);
+            iteration++;
+            assert(iteration < m_width* m_width);
+            current = parent;
+        };
+    }
+
+    enum class WaveResult
+    {
+        Collapsed,
+        Goal,
+    };
+
     template <class Predicate>
-    int runWave(const Predicate& pred)
+    WaveResult runWave(const Predicate& pred)
     {
         int iterations = 0;
         bool findGoal = false;
@@ -181,10 +207,11 @@ public:
             }
 
             addAdjacentNodes(top);
-
             iterations++;
         }
-        return 0;
+        if (findGoal)
+            return WaveResult::Goal;
+        return WaveResult::Collapsed;
     }
 
 protected:
@@ -224,8 +251,8 @@ struct TargetSearchPredicate
     SearchGrid& grid;
 };
 
-/// Estimated size of a single node = ~16 bytes.
-/// Priority queue will need another 4 byte per node (very worst case).
+/// Estimated size of a single from = ~16 bytes.
+/// Priority queue will need another 4 byte per from (very worst case).
 /// Path ID or visitTime will take 4 bytes.
 /// Max size of a map Nmax = 2000
 /// Grid size = sizeof(Node) + sizeof(NodeID) + 4 = 24 * 2000 * 2000 ~ 96Mb.

@@ -10,17 +10,6 @@ using Row = std::vector<bool>;
 /// A type for all coordinates.
 using Coord = uint16_t;
 
-struct Order
-{
-    Coord sx;
-    Coord sy;
-    Coord fx;
-    Coord fy;
-    // Price of specific order.
-    uint16_t price;
-    // A time when this order has been placed.
-    uint16_t time;
-};
 
 struct Point2
 {
@@ -37,14 +26,43 @@ struct Point2
     }
 };
 
-struct Robot {
-    Coord x;
-    Coord y;
+struct Path
+{
+    std::vector<Point2> points;
 };
 
-struct State
+struct Order
 {
-    std::vector<Robot> robots;
+    Point2 start;
+    Point2 finish;
+    // Price of specific order.
+    int price;
+    // A time when this order has been placed.
+    int time;
+    // ID of a robot which has taken this order.
+    int robotId;
+    // Path from start to finish.
+    std::unique_ptr<Path> path;
+
+    int distance() const
+    {
+        return path ? (int)path->points.size() : -1;
+    }
+};
+
+
+struct Robot {
+    enum class State
+    {
+        Idle,
+        /// Moving to delivery start.
+        MovingStart,
+        /// Moving to delivery finish.
+        MovingFinish,
+        /// Moving home.
+        MovingHome
+    };
+    Point2 pos;
 };
 
 struct Map
@@ -63,10 +81,12 @@ struct Map
         return x + y * dimension;
     }
 
-    void indexToCoord(int index, Coord& x, Coord& y) const
+    Point2 indexToCoord(int index) const
     {
-        y = index / dimension;
-        x = index % dimension;
+        Point2 result;
+        result.y = index / dimension;
+        result.x = index % dimension;
+        return result;
     }
 
     /// Check if a tile (x, y) is occupied.
@@ -74,8 +94,6 @@ struct Map
         return occupancy[y][x];
     }
 
-    /// Indexes of available tiles.
-    std::set<int> availableTiles;
-
     std::vector<std::vector<int>> islands;
 };
+
