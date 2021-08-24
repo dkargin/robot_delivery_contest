@@ -229,6 +229,16 @@ public:
             attrs << Attr("style", style);
     }
 
+    /// Draw horizontal line.
+    void vline(int x, int y, int h, const char* style)
+    {
+        Tag tag(out(), "line");
+        auto&& attrs = tag.attrs();
+        attrs << Attr("x1", x) << Attr("y1", y) << Attr("x2", x) << Attr("y2", y + h);
+        if (style)
+            attrs << Attr("style", style);
+    }
+
     /// Draw a regular line.
     void line(int x0, int y0, int x1, int y1, const char* style)
     {

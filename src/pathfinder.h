@@ -1,8 +1,9 @@
 #pragma once
 
-
 #include <vector>
 #include <memory>
+#include <cassert>
+
 #include "state.h"
 #include "priority_heap.h"
 
@@ -172,7 +173,7 @@ public:
 
     /// Trace back path from specified point.
     /// It returns reversed path.
-    void tracePath(Coord x, Coord y, std::vector<Point2>& path) const
+    bool tracePath(Coord x, Coord y, std::vector<Point2>& path) const
     {
         const Node* current = getNode(x, y);
         int iteration = 0;
@@ -188,9 +189,13 @@ public:
             parent = &m_grid[current->parent];
             assert(parent != current);
             iteration++;
+
             assert(iteration < m_width* m_width);
+            if (iteration >= m_width * m_width)
+                return false;
             current = parent;
         };
+        return true;
     }
 
     enum class WaveResult

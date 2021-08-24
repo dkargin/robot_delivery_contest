@@ -7,6 +7,7 @@ add_executable(robot_dispatcher
 	problem_parser.cpp
 	svg.h
 	svg.cpp
-	draw.h)
+	draw.h
+	draw.cpp)
 
 target_compile_definitions(robot_dispatcher PUBLIC -DLOG_STDIO)

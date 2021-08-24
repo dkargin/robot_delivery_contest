@@ -79,9 +79,6 @@ public:
         constexpr int maxOrders = 10000000;
         if (m_numOrders > maxOrders)
             return false;
-#ifdef LOG_STDIO
-        std::cout << "Max revenue =" << m_numOrders * m_maxTips << std::endl;
-#endif
         m_state = State::ParsedRequestsNumber;
         return true;
     }

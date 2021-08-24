@@ -63,6 +63,9 @@ int main(int argc, const char* argv[])
             pred.target = order.start;
             auto result = dispatcher.m_search.runWave(pred);
             assert(result == SearchGrid::WaveResult::Goal);
+            char svgPath[255];
+            std::snprintf(svgPath, sizeof(svgPath), "tree_%d.svg", (int)o);
+            dumpPathfinder(dispatcher.m_search, svgPath);
             order.path = std::make_unique<Path>();
             dispatcher.m_search.tracePath(order.start.x, order.start.y, order.path->points);
 #ifdef LOG_STDIO
