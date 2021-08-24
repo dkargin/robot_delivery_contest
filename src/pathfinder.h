@@ -13,13 +13,13 @@
 /// The same for NodeId.
 struct Node {
     using ID = int32_t;
+    using CostType = uint32_t;
     static constexpr ID InvalidID = -1;
     ID parent = InvalidID;
     /// Position in priority queue/binary heap.
     ID heapIndex = InvalidID;
     /// Search ID.
     uint32_t waveId = 0;
-    using CostType = uint32_t;
     /// Accumulated path cost.
     CostType cost = 0;
 
@@ -80,10 +80,11 @@ public:
     /// Begins a new search.
     uint32_t beginSearch()
     {
+        m_priorityHeap.clear();
         if (m_lastWaveId >= MaxWaveId)
         {
-            clearGrid();
             m_lastWaveId = 1;
+            clearGrid();
         }
         else
         {
@@ -106,7 +107,12 @@ public:
     // Clears all the contents of the grid.
     void clearGrid()
     {
-        assert(false);
+        for (auto& node: m_grid)
+        {
+            node.cost = 0;
+            node.parent = Node::InvalidID;
+            node.waveId = 0;
+        }
     }
     // Get index of a from.
     NodeID nodeIndex(const Node* node) const
