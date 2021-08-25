@@ -37,12 +37,14 @@ int main(int argc, const char* argv[])
         std::cerr << "Failed to parse requests" << std::endl;
         return -1;
     }
-
+    auto timeStart = Clock::now();
     Dispatcher dispatcher(map);
     dispatcher.processIslands();
     dispatcher.calculateInitialPositions(parser.getMaxSteps(), parser.getMaxOrders(),
         parser.getOrderPrice(), parser.getRobotPrice());
     dispatcher.publishInitialPositions();
+    int hitIterations = -1;
+    constexpr int maxTimeMs = 18000;
 
     for (int step = 0; step < parser.getMaxSteps(); step++)
     {
@@ -57,6 +59,23 @@ int main(int argc, const char* argv[])
             dispatcher.moveRobots(step, tick);
 
         dispatcher.publishRobots();
+
+        auto now = Clock::now();
+        if (MS(timeStart, now).count() > maxTimeMs && hitIterations == -1)
+        {
+            hitIterations = step;
+        }
     }
+
+    auto timeFinish = Clock::now();
+#ifdef LOG_STDIO
+    std::cout << "Done in " << MS(timeStart, timeFinish).count() << "ms." << std::endl;
+    if (hitIterations != -1)
+    {
+        std::cout << "Managed to process only " << hitIterations
+                << " steps out of " << parser.getMaxSteps()
+                << " (" << (100*hitIterations / parser.getMaxSteps()) << "%)" << std::endl;
+    }
+#endif
     return 0;
 }

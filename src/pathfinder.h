@@ -274,13 +274,18 @@ struct Node {
     uint32_t waveId = 0;
     /// Accumulated path cost.
     CostType cost = 0;
+
+#ifdef USE_HEURISTIC
     /// Heuristic estimate of a cost.
     CostType estimate = 0;
+#endif
 
     void reset()
     {
         cost = 0;
+#ifdef USE_HEURISTIC
         estimate = 0;
+#endif
         parent = InvalidID;
     }
 };
@@ -292,7 +297,11 @@ template<> struct ContainerTraits<Node>
 
     static CostType getCost(const Node* a)
     {
+#ifdef USE_HEURISTIC
         return a->cost + a->estimate;
+#else
+        return a->cost;
+#endif
     }
 
     /// Implements operator a > b

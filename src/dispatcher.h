@@ -178,7 +178,6 @@ public:
             m_search.addNode(pt.x, pt.y, 0);
             m_search.runWave(ep);
             std::vector<int> selection;
-            std::vector<Point2> ptSelection;
             for (int row = 0; row < m_map.dimension; row++) {
                 for (int col = 0; col < m_map.dimension; col++) {
                     int index = m_map.index(col, row);
@@ -187,7 +186,6 @@ public:
                     {
                         availableTiles.erase(index);
                         selection.push_back(index);
-                        ptSelection.push_back(Point2(col, row));
                     }
                 }
             }
@@ -195,7 +193,6 @@ public:
             std::cout << "Generated island with " << selection.size() << " elements" << std::endl;
 #endif
             m_map.islands.push_back(std::move(selection));
-            m_map.ptIslands.push_back(std::move(ptSelection));
         } while (!availableTiles.empty());
     }
 
@@ -317,9 +314,9 @@ public:
             m_search.addNode(order->start.x, order->start.y, 0);
             auto waveResult = m_search.runWave(m_groupPred);
 
+#ifdef LOG_SVG
             char svgPath[255];
             std::snprintf(svgPath, sizeof(svgPath), "tree_mo%d.svg", (int)orderId);
-#ifdef LOG_SVG
             PathDrawer drawer(m_search, svgPath);
             drawer.drawGrid(true, false, true);
             drawer.drawTargets(m_groupPred.targets);
@@ -333,8 +330,8 @@ public:
             for (int r: robotCandidates)
             {
                 Robot& robot = m_robots[r];
-                m_search.tracePath(robot.pos.x, robot.pos.y, robot.tmpPath);
-                int distance = (int)robot.tmpPath.size();
+                const auto* node = m_search.getNode(robot.pos.x, robot.pos.y);
+                int distance = node->cost;
                 if (distance < nearestDistance || nearestRobot == -1)
                 {
                     nearestRobot = r;
@@ -347,7 +344,7 @@ public:
 #endif
             auto& robot = m_robots[nearestRobot];
             robot.orders.push_back(orderId);
-            std::swap(order->approachPath.points, robot.tmpPath);
+            m_search.tracePath(robot.pos.x, robot.pos.y, order->approachPath.points);
 #ifdef LOG_SVG
             drawer.drawPath(order->approachPath.points);
 #endif

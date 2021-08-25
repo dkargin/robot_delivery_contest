@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <set>
+#include <map>
 #include <list>
 #include <chrono>
 #include <memory>
@@ -34,6 +35,16 @@ struct Point2
     friend bool operator == (const Point2& a, const Point2& b)
     {
         return a.x == b.x && a.y == b.y;
+    }
+
+    friend bool operator != (const Point2& a, const Point2& b)
+    {
+        return a.x != b.x || a.y != b.y;
+    }
+
+    friend bool operator<(const Point2 &lhs, const Point2 &rhs)
+    {
+        return (lhs.x < rhs.x) || ((lhs.x == rhs.x) && (lhs.y < rhs.y));
     }
 };
 
@@ -184,8 +195,6 @@ struct Robot {
         pos = newPos;
         commands[step] = cmd;
     }
-
-    std::vector<Point2> tmpPath;
 };
 
 struct Map
@@ -218,6 +227,5 @@ struct Map
     }
 
     std::vector<std::vector<int>> islands;
-    std::vector<std::vector<Point2>> ptIslands;
 };
 

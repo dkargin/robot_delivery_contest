@@ -1,14 +1,15 @@
 
 
-/// Estimated size of a single from = ~16 bytes.
-/// Priority queue will need another 4 byte per from (very worst case).
-/// Path ID or visitTime will take 4 bytes.
-/// Max size of a map Nmax = 2000
-/// Grid size = sizeof(Node) + sizeof(NodeID) + 4 = 24 * 2000 * 2000 ~ 96Mb.
-/// 
+Estimated size of a single from = ~16 bytes.
+Priority queue will need another 4 byte per from (very worst case).
+Path ID or visitTime will take 4 bytes.
+Max size of a map Nmax = 2000
+Grid size = sizeof(Node) + sizeof(NodeID) + 4 = 24 * 2000 * 2000 ~ 96Mb.
 
 
-Input
+
+Input:
+
 ```
 4 20 10
 ....
@@ -31,7 +32,33 @@ Input
 0
 0
 ```
+
+```
 wrong answer Rover 1 can't finish order 5 at iteration 6 because he does not reach destination yet
 
-
 Interactor exit code : 1
+```
+
+Fixed.
+
+
+Testing task08:
+
+```
+Done in 90745ms.
+Managed to process only 6224 steps out of 100000
+```
+
+Removed unnecessary tracing:
+
+```
+Done in 76210ms.
+Managed to process only 23526 steps out of 100000 (23%)
+```
+
+Removed heuristics:
+
+```
+Done in 71422ms.
+Managed to process only 24942 steps out of 100000 (24%)
+```
