@@ -179,8 +179,7 @@ struct Robot {
         }
         else
         {
-            // Invalid step.
-            assert(false);
+            throw std::runtime_error("Invalid step");
         }
         pos = newPos;
         commands[step] = cmd;

@@ -54,7 +54,7 @@ int main(int argc, const char* argv[])
 
         dispatcher.prepareTurn();
         for (int tick = 0; tick < 60; tick++)
-            dispatcher.moveRobots(tick);
+            dispatcher.moveRobots(step, tick);
 
         dispatcher.publishRobots();
     }

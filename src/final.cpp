@@ -1035,7 +1035,7 @@ public:
 
         for (size_t o = m_orders.size() - added; o < m_orders.size(); o++)
         {
-            m_freeOrders.push_back((int)o);
+            m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
             // Finding path from start to finish.
             auto timeStart = Clock::now();
@@ -1049,6 +1049,8 @@ public:
             order.deliveryPath.timeSearch = MS(timeStart, timeEnd);
             auto traceStart = Clock::now();
             m_search.tracePath(order.start.x, order.start.y, order.deliveryPath.points);
+            assert(order.deliveryPath.points.front() == order.start);
+            assert(order.deliveryPath.points.back() == order.finish);
             auto traceEnd = Clock::now();
             order.deliveryPath.timeTrace = MS(traceStart, traceEnd);
 #ifdef LOG_SVG
@@ -1059,8 +1061,8 @@ public:
                 drawer.drawGrid(true, false, true);
                 drawer.drawStarts({ order.start });
                 drawer.drawTargets({ order.finish });
-                drawer.drawPath(order.path.points);
-            }
+                drawer.drawPath(order.deliveryPath.points);
+        }
 #endif
 
 #ifdef LOG_STDIO
@@ -1068,19 +1070,20 @@ public:
                 << " wave in " << order.deliveryPath.timeSearch.count() << "ms"
                 << " trace in " << order.deliveryPath.timeTrace.count() << std::endl;
 #endif
-        }
+    }
 
         std::vector<int> robotCandidates;
         robotCandidates.reserve(m_robots.size());
         // Find best robots for this task.
         // Using greedy algorithm for now.
-        for (int i = 0; i < m_freeOrders.size(); i++)
+        std::vector<int> assignedOrders;
+        for (int orderId : m_freeOrders)
         {
-            int orderId = m_freeOrders[i];
             Order* order = m_orders[orderId].get();
+            assert(order);
             if (!order)
             {
-                removeFreeOrder(i);
+                assignedOrders.push_back(orderId);
                 continue;
             }
 
@@ -1143,11 +1146,13 @@ public:
             robot.orders.push_back(orderId);
             std::swap(order->approachPath.points, robot.tmpPath);
 #ifdef LOG_SVG
-            drawer.drawPath(rorder->approachPath.points);
+            drawer.drawPath(order->approachPath.points);
 #endif
-            removeFreeOrder(i);
-        }
-    }
+            assignedOrders.push_back(orderId);
+                }
+        for (auto orderId : assignedOrders)
+            m_freeOrders.erase(orderId);
+            }
 
     void prepareTurn()
     {
@@ -1155,7 +1160,7 @@ public:
             robot.beginStep();
     }
 
-    void moveRobots(int tick)
+    void moveRobots(int step, int tick)
     {
         for (int r = 0; r < m_robots.size(); r++)
         {
@@ -1206,7 +1211,7 @@ public:
                 else
                 {
                     // Final position.
-                    robot.pathPosition = 0;
+                    robot.pathPosition = -1;
                     robot.commands[tick] = Robot::Command::Drop;
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
@@ -1214,13 +1219,6 @@ public:
                 }
             }
         }
-    }
-
-    // Remove free order at specified index.
-    void removeFreeOrder(int i)
-    {
-        std::swap(m_freeOrders[i], m_freeOrders.back());
-        m_freeOrders.pop_back();
     }
 
     void publishInitialPositions()
@@ -1256,9 +1254,8 @@ protected:
     Map& m_map;
     std::vector<Robot> m_robots;
     // A list of IDs of free orders.
-    std::vector<int> m_freeOrders;
-};
-
+    std::set<int> m_freeOrders;
+        };
 /// END_DISPATCHER_H
 
 /// MAIN_CPP
@@ -1294,7 +1291,7 @@ int main(int argc, const char* argv[])
 
         dispatcher.prepareTurn();
         for (int tick = 0; tick < 60; tick++)
-            dispatcher.moveRobots(tick);
+            dispatcher.moveRobots(step, tick);
 
         dispatcher.publishRobots();
     }
