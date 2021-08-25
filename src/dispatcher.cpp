@@ -54,7 +54,6 @@ int main(int argc, const char* argv[])
         // Process tasks and them to robots.
         dispatcher.processNewOrders(added);
 
-        dispatcher.prepareTurn();
         for (int tick = 0; tick < 60; tick++)
             dispatcher.moveRobots(step, tick);
 

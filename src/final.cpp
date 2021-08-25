@@ -169,7 +169,7 @@ struct Robot {
     }
 
     /// Clears command buffer.
-    void beginStep()
+    void clearCommands()
     {
         for (int i = 0; i < 60; i++)
             commands[i] = Command::Idle;
@@ -1139,7 +1139,7 @@ public:
                 {
                     nearestRobot = r;
                     nearestDistance = distance;
-            }
+                }
             }
 
 #ifdef LOG_STDIO
@@ -1155,12 +1155,6 @@ public:
         }
         for (auto orderId : assignedOrders)
             m_freeOrders.erase(orderId);
-    }
-
-    void prepareTurn()
-    {
-        for (auto& robot : m_robots)
-            robot.beginStep();
     }
 
     void moveRobots(int step, int tick)
@@ -1184,7 +1178,7 @@ public:
                     robot.pathPosition = 0;
                     assert(robot.pos == robot.approachPath[0]);
                 }
-        }
+            }
 
             if (robot.state == Robot::State::MovingStart)
             {
@@ -1239,8 +1233,8 @@ public:
                     robot.order = -1;
                 }
             }
+        }
     }
-}
 
     void publishInitialPositions()
     {
@@ -1254,7 +1248,7 @@ public:
     /// Publish robot commands for last simulation minute.
     void publishRobots()
     {
-        for (const auto& robot : m_robots)
+        for (auto& robot : m_robots)
         {
             std::string out;
             for (auto cmd : robot.commands)
@@ -1263,6 +1257,7 @@ public:
                 out.push_back(ch);
             }
             std::cout << out.c_str() << std::endl;
+            robot.clearCommands();
         }
     }
 
@@ -1312,6 +1307,7 @@ protected:
     std::set<int> m_freeOrders;
 };
 
+
 /// END_DISPATCHER_H
 
 /// MAIN_CPP
@@ -1350,8 +1346,6 @@ int main(int argc, const char* argv[])
         if (MS(timeStart, current).count() < timeLimit)
         {
             dispatcher.processNewOrders(added);
-
-            dispatcher.prepareTurn();
 
             for (int tick = 0; tick < 60; tick++)
                 dispatcher.moveRobots(step, tick);

@@ -328,12 +328,6 @@ public:
             m_freeOrders.erase(orderId);
     }
 
-    void prepareTurn()
-    {
-        for (auto& robot : m_robots)
-            robot.beginStep();
-    }
-
     void moveRobots(int step, int tick)
     {
         for (int r = 0; r < m_robots.size(); r++)
@@ -425,7 +419,7 @@ public:
     /// Publish robot commands for last simulation minute.
     void publishRobots()
     {
-        for (const auto& robot: m_robots)
+        for (auto& robot: m_robots)
         {
             std::string out;
             for (auto cmd: robot.commands)
@@ -434,6 +428,7 @@ public:
                 out.push_back(ch);
             }
             std::cout << out.c_str() << std::endl;
+            robot.clearCommands();
         }
     }
 

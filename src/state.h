@@ -169,7 +169,7 @@ struct Robot {
     }
 
     /// Clears command buffer.
-    void beginStep()
+    void clearCommands()
     {
         for (int i = 0; i < 60; i++)
             commands[i] = Command::Idle;
