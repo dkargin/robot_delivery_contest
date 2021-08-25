@@ -911,8 +911,9 @@ public:
         for (int i = 0; i < numOrders; i++)
         {
             auto order = std::make_unique<Order>();
-            m_in >> order->start.x >> order->start.y
-                >> order->finish.x >> order->finish.y;
+            // Start_r, Start_c, Finish_r, Finish_c
+            m_in >> order->start.y >> order->start.x
+                >> order->finish.y >> order->finish.x;
             order->start.x -= 1;
             order->start.y -= 1;
             order->finish.x -= 1;
@@ -1190,6 +1191,7 @@ public:
                     robot.commands[tick] = Robot::Command::Pick;
                     robot.state = Robot::State::MovingFinish;
                     assert(robot.pos == order->deliveryPath[0]);
+                    assert(robot.pos == order->start);
                 }
             }
             else if (robot.state == Robot::State::MovingFinish)
@@ -1204,7 +1206,8 @@ public:
                 {
                     // Final position.
                     robot.pathPosition = 0;
-                    robot.commands[tick] = Robot::Command::Down;
+                    robot.commands[tick] = Robot::Command::Drop;
+                    assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
                     robot.orders.pop_front();
                 }
@@ -1224,7 +1227,7 @@ public:
         std::cout << m_robots.size() << std::endl;
         for (const auto& robot : m_robots)
         {
-            std::cout << robot.pos.x << " " << robot.pos.y << std::endl;
+            std::cout << robot.pos.y + 1 << " " << robot.pos.x + 1 << std::endl;
         }
     }
 
