@@ -7,6 +7,7 @@
 #include <list>
 #include <chrono>
 #include <memory>
+#include <algorithm>
 
 using Clock = std::chrono::steady_clock;
 using Duration = std::chrono::milliseconds;
@@ -65,6 +66,11 @@ struct Path
     {
         return (int)points.size();
     }
+
+    void reverse()
+    {
+        std::reverse(points.begin(), points.end());
+    }
 };
 
 struct Order
@@ -77,6 +83,8 @@ struct Order
     int time;
     /// ID of a robot which has taken this order.
     int robotId = -1;
+
+    int siteIndex = -1;
 
     /// Path from start to finish.
     Path deliveryPath;
@@ -151,6 +159,9 @@ struct Robot {
 
     /// Sequence of commands for current tick.
     std::vector<Command> commands;
+
+    /// List of sites with orders.
+    std::list<int> sites;
     /// Identifiers of assigned orders.
     std::list<int> orders;
     /// Position on current path.

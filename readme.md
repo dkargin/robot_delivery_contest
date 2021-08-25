@@ -62,3 +62,10 @@ Removed heuristics:
 Done in 71422ms.
 Managed to process only 24942 steps out of 100000 (24%)
 ```
+
+Removed extra pathfinding:
+
+```
+Done in 49061ms.
+Managed to process only 36354 steps out of 100000 (36%)
+```

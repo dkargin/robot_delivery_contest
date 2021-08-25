@@ -237,39 +237,6 @@ public:
         {
             m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
-            // Finding path from start to finish.
-            auto timeStart = Clock::now();
-            m_search.beginSearch();
-            // Doing reverse search.
-            m_search.addNode(order.finish.x, order.finish.y, 0);
-            pred.target = order.start;
-            auto result = m_search.runWave(pred);
-            assert(result == SearchGrid::WaveResult::Goal);
-            auto timeEnd = Clock::now();
-            order.deliveryPath.timeSearch = MS(timeStart, timeEnd);
-            auto traceStart = Clock::now();
-            m_search.tracePath(order.start.x, order.start.y, order.deliveryPath.points);
-            assert(order.deliveryPath.points.front() == order.start);
-            assert(order.deliveryPath.points.back() == order.finish);
-            auto traceEnd = Clock::now();
-            order.deliveryPath.timeTrace = MS(traceStart, traceEnd);
-#ifdef LOG_SVG
-            char svgPath[255];
-            std::snprintf(svgPath, sizeof(svgPath), "tree_o%d.svg", (int)o);
-            {
-                PathDrawer drawer(m_search, svgPath);
-                drawer.drawGrid(true, false, true);
-                drawer.drawStarts({ order.start });
-                drawer.drawTargets({ order.finish });
-                drawer.drawPath(order.deliveryPath.points);
-            }
-#endif
-
-#ifdef LOG_STDIO
-            std::cout << "Order #" << o << " length=" << order.deliveryDistance()
-                    << " wave in " << order.deliveryPath.timeSearch.count() << "ms"
-                    << " trace in " << order.deliveryPath.timeTrace.count() << std::endl;
-#endif
         }
 
         std::vector<int> robotCandidates;
@@ -301,6 +268,7 @@ public:
                 m_groupPred.addTarget(robot.pos);
                 robotCandidates.push_back(r);
             }
+            m_groupPred.addTarget(order->finish);
 
             if (robotCandidates.empty())
             {
@@ -324,6 +292,9 @@ public:
 #endif
             if (waveResult == SearchGrid::WaveResult::Collapsed)
                 throw std::runtime_error("Multiwave has collapsed");
+
+            m_search.tracePath(order->finish.x, order->finish.y, order->deliveryPath.points);
+            order->deliveryPath.reverse();
 
             int nearestRobot = -1;
             int nearestDistance = m_search.getWidth() * m_search.getWidth();
@@ -447,6 +418,28 @@ public:
 
 public:
     std::vector<std::unique_ptr<Order>> m_orders;
+
+    struct Site
+    {
+        // Unassigned orders from this site.
+        std::set<int> orders;
+    };
+
+    std::vector<Site> m_sites;
+
+    std::map<Point2, int> m_siteMap;
+
+    int getSiteIndex(const Point2& pt)
+    {
+        auto it = m_siteMap.find(pt);
+        if (it == m_siteMap.end())
+        {
+            m_sites.emplace_back();
+            m_siteMap[pt] = m_sites.size() - 1;
+            return m_sites.size() - 1;
+        }
+        return it->second;
+    }
 
 protected:
     SearchGrid m_search;
