@@ -8,4 +8,11 @@ add_executable(robot_dispatcher
 	draw.h
 	draw.cpp)
 
-target_compile_definitions(robot_dispatcher PUBLIC -DLOG_STDIO -DLOG_SVG)
+option(LOG_SVG "Draw debug data to SVG files" OFF)
+
+set(DEFINES -DLOG_STDIO)
+if (LOG_SVG)
+	list(APPEND DEFINES -DLOG_SVG)
+endif ()
+
+target_compile_definitions(robot_dispatcher PUBLIC ${DEFINES})

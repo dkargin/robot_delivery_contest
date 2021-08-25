@@ -176,12 +176,12 @@ public:
 
             char svgPath[255];
             std::snprintf(svgPath, sizeof(svgPath), "tree_mo%d.svg", (int)orderId);
-            {
-                PathDrawer drawer(m_search, svgPath);
-                drawer.drawGrid(true, false, true);
-                drawer.drawTargets(m_groupPred.targets);
-                drawer.drawStarts({ order->start });
-            }
+#ifdef LOG_SVG
+            PathDrawer drawer(m_search, svgPath);
+            drawer.drawGrid(true, false, true);
+            drawer.drawTargets(m_groupPred.targets);
+            drawer.drawStarts({ order->start });
+#endif
             if (waveResult == SearchGrid::WaveResult::Collapsed)
                 throw std::runtime_error("Multiwave has collapsed");
 
@@ -191,7 +191,7 @@ public:
             {
                 Robot& robot = m_robots[r];
                 m_search.tracePath(robot.pos.x, robot.pos.y, robot.tmpPath);
-                int distance = robot.tmpPath.size();
+                int distance = (int)robot.tmpPath.size();
                 if (distance < nearestDistance || nearestRobot == -1)
                 {
                     nearestRobot = r;
@@ -202,7 +202,11 @@ public:
 #ifdef LOG_STDIO
             std::cout << "Assigning task " << orderId << " to robot " << nearestRobot << std::endl;
 #endif
-            m_robots[nearestRobot].orders.push_back(orderId);
+            auto& robot = m_robots[nearestRobot];
+            robot.orders.push_back(orderId);
+#ifdef LOG_SVG
+            drawer.drawPath(robot.tmpPath);
+#endif
             removeFreeOrder(i);
         }
     }

@@ -128,5 +128,16 @@ void PathDrawer::drawStarts(const std::vector<Point2>& starts)
 
 void PathDrawer::drawPath(const std::vector<Point2>& path)
 {
+    for (int i = 0; i < path.size() - 1; i++)
+    {
+        const auto& from = path[i];
+        const auto& to = path[i + 1];
 
+        int x0 = leftMargin + from.x * cellWidth + cellWidth/2;
+        int y0 = topMargin + from.y * cellWidth + cellWidth/2;
+
+        int x1 = leftMargin + to.x * cellWidth + cellWidth / 2;
+        int y1 = topMargin + to.y * cellWidth + cellWidth / 2;
+        m_svg->line(x0, y0, x1, y1, "stroke-width:3;stroke:blue");
+    }
 }
