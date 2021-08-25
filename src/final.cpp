@@ -1006,6 +1006,8 @@ public:
         int needRobots = avgTimeToDeliver / orderDelay;
         if (needRobots < 1)
             needRobots = 1;
+        if (needRobots > 100)
+            needRobots = 100;
         int maxRevenue = maxOrders * orderPrice;
         int expectedRevenue = maxRevenue - needRobots * robotPrice - avgTimeToDeliver * maxOrders;
 #ifdef LOG_STDIO
