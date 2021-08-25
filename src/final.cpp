@@ -1,10 +1,13 @@
+#include <cassert>
 #include <cstdint>
+#include <stdexcept>
 #include <vector>
 #include <set>
+#include <map>
 #include <list>
 #include <chrono>
 #include <memory>
-#include <cassert>
+#include <algorithm>
 
 using Clock = std::chrono::steady_clock;
 using Duration = std::chrono::milliseconds;
@@ -34,6 +37,16 @@ struct Point2
     {
         return a.x == b.x && a.y == b.y;
     }
+
+    friend bool operator != (const Point2& a, const Point2& b)
+    {
+        return a.x != b.x || a.y != b.y;
+    }
+
+    friend bool operator<(const Point2& lhs, const Point2& rhs)
+    {
+        return (lhs.x < rhs.x) || ((lhs.x == rhs.x) && (lhs.y < rhs.y));
+    }
 };
 
 struct Path
@@ -53,6 +66,11 @@ struct Path
     {
         return (int)points.size();
     }
+
+    void reverse()
+    {
+        std::reverse(points.begin(), points.end());
+    }
 };
 
 struct Order
@@ -66,11 +84,10 @@ struct Order
     /// ID of a robot which has taken this order.
     int robotId = -1;
 
+    int siteIndex = -1;
+
     /// Path from start to finish.
     Path deliveryPath;
-
-    /// Path from current position of a robot to pickup point.
-    Path approachPath;
 
     /// Check if order is assigned to any robot.
     bool isAssigned() const
@@ -82,12 +99,8 @@ struct Order
     {
         return (int)deliveryPath.points.size();
     }
-
-    int approachDistance() const
-    {
-        return (int)approachPath.points.size();
-    }
 };
+
 
 struct Robot {
     enum class State
@@ -138,8 +151,15 @@ struct Robot {
 
     /// Sequence of commands for current tick.
     std::vector<Command> commands;
+
+    /// Path from current position of a robot to pickup point.
+    Path approachPath;
+
+
+    /// List of sites with orders.
+    std::list<int> sites;
     /// Identifiers of assigned orders.
-    std::list<int> orders;
+    int order = -1;
     /// Position on current path.
     int pathPosition = -1;
 
@@ -177,14 +197,16 @@ struct Robot {
         }
         else
         {
-            // Invalid step.
-            assert(false);
+            throw std::runtime_error("Invalid step");
         }
         pos = newPos;
         commands[step] = cmd;
     }
 
-    std::vector<Point2> tmpPath;
+    bool isIdle() const
+    {
+        return state == State::Idle && order == -1 && sites.empty();
+    }
 };
 
 struct Map
@@ -217,7 +239,6 @@ struct Map
     }
 
     std::vector<std::vector<int>> islands;
-    std::vector<std::vector<Point2>> ptIslands;
 };
 
 /// END_STATE_H
@@ -491,13 +512,18 @@ struct Node {
     uint32_t waveId = 0;
     /// Accumulated path cost.
     CostType cost = 0;
+
+#ifdef USE_HEURISTIC
     /// Heuristic estimate of a cost.
     CostType estimate = 0;
+#endif
 
     void reset()
     {
         cost = 0;
+#ifdef USE_HEURISTIC
         estimate = 0;
+#endif
         parent = InvalidID;
     }
 };
@@ -509,7 +535,11 @@ template<> struct ContainerTraits<Node>
 
     static CostType getCost(const Node* a)
     {
+#ifdef USE_HEURISTIC
         return a->cost + a->estimate;
+#else
+        return a->cost;
+#endif
     }
 
     /// Implements operator a > b
@@ -528,6 +558,7 @@ template<> struct ContainerTraits<Node>
         return a->heapIndex;
     }
 };
+
 
 /**
  * Tricks used to achieve better performance.
@@ -976,7 +1007,6 @@ public:
             m_search.addNode(pt.x, pt.y, 0);
             m_search.runWave(ep);
             std::vector<int> selection;
-            std::vector<Point2> ptSelection;
             for (int row = 0; row < m_map.dimension; row++) {
                 for (int col = 0; col < m_map.dimension; col++) {
                     int index = m_map.index(col, row);
@@ -985,7 +1015,6 @@ public:
                     {
                         availableTiles.erase(index);
                         selection.push_back(index);
-                        ptSelection.push_back(Point2(col, row));
                     }
                 }
             }
@@ -993,7 +1022,6 @@ public:
             std::cout << "Generated island with " << selection.size() << " elements" << std::endl;
 #endif
             m_map.islands.push_back(std::move(selection));
-            m_map.ptIslands.push_back(std::move(ptSelection));
         } while (!availableTiles.empty());
     }
 
@@ -1002,6 +1030,7 @@ public:
         // Average time for delivery.
         int avgTimeToDeliver = 2 * m_map.dimension;
         int orderDelay = 60 * maxSteps / maxOrders;
+        m_orders.reserve(maxOrders);
 
         int needRobots = avgTimeToDeliver / orderDelay;
         if (needRobots < 1)
@@ -1037,40 +1066,10 @@ public:
         {
             m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
-            // Finding path from start to finish.
-            auto timeStart = Clock::now();
-            m_search.beginSearch();
-            // Doing reverse search.
-            m_search.addNode(order.finish.x, order.finish.y, 0);
-            pred.target = order.start;
-            auto result = m_search.runWave(pred);
-            assert(result == SearchGrid::WaveResult::Goal);
-            auto timeEnd = Clock::now();
-            order.deliveryPath.timeSearch = MS(timeStart, timeEnd);
-            auto traceStart = Clock::now();
-            m_search.tracePath(order.start.x, order.start.y, order.deliveryPath.points);
-            assert(order.deliveryPath.points.front() == order.start);
-            assert(order.deliveryPath.points.back() == order.finish);
-            auto traceEnd = Clock::now();
-            order.deliveryPath.timeTrace = MS(traceStart, traceEnd);
-#ifdef LOG_SVG
-            char svgPath[255];
-            std::snprintf(svgPath, sizeof(svgPath), "tree_o%d.svg", (int)o);
-            {
-                PathDrawer drawer(m_search, svgPath);
-                drawer.drawGrid(true, false, true);
-                drawer.drawStarts({ order.start });
-                drawer.drawTargets({ order.finish });
-                drawer.drawPath(order.deliveryPath.points);
+            int siteIndex = getSiteIndex(order.start);
+            m_sites[siteIndex].orders.insert(o);
+            order.siteIndex = siteIndex;
         }
-#endif
-
-#ifdef LOG_STDIO
-            std::cout << "Order #" << o << " length=" << order.deliveryDistance()
-                << " wave in " << order.deliveryPath.timeSearch.count() << "ms"
-                << " trace in " << order.deliveryPath.timeTrace.count() << std::endl;
-#endif
-    }
 
         std::vector<int> robotCandidates;
         robotCandidates.reserve(m_robots.size());
@@ -1093,7 +1092,7 @@ public:
             {
                 const Robot& robot = m_robots[r];
                 // Skip robots which are occupied now.
-                if (!robot.orders.empty())
+                if (!robot.isIdle())
                 {
                     // TODO: can queue tasks.
                     continue;
@@ -1101,6 +1100,7 @@ public:
                 m_groupPred.addTarget(robot.pos);
                 robotCandidates.push_back(r);
             }
+            m_groupPred.addTarget(order->finish);
 
             if (robotCandidates.empty())
             {
@@ -1114,9 +1114,9 @@ public:
             m_search.addNode(order->start.x, order->start.y, 0);
             auto waveResult = m_search.runWave(m_groupPred);
 
+#ifdef LOG_SVG
             char svgPath[255];
             std::snprintf(svgPath, sizeof(svgPath), "tree_mo%d.svg", (int)orderId);
-#ifdef LOG_SVG
             PathDrawer drawer(m_search, svgPath);
             drawer.drawGrid(true, false, true);
             drawer.drawTargets(m_groupPred.targets);
@@ -1125,34 +1125,37 @@ public:
             if (waveResult == SearchGrid::WaveResult::Collapsed)
                 throw std::runtime_error("Multiwave has collapsed");
 
+            m_search.tracePath(order->finish.x, order->finish.y, order->deliveryPath.points);
+            order->deliveryPath.reverse();
+
             int nearestRobot = -1;
             int nearestDistance = m_search.getWidth() * m_search.getWidth();
             for (int r : robotCandidates)
             {
                 Robot& robot = m_robots[r];
-                m_search.tracePath(robot.pos.x, robot.pos.y, robot.tmpPath);
-                int distance = (int)robot.tmpPath.size();
+                const auto* node = m_search.getNode(robot.pos.x, robot.pos.y);
+                int distance = node->cost;
                 if (distance < nearestDistance || nearestRobot == -1)
                 {
                     nearestRobot = r;
                     nearestDistance = distance;
-                }
+            }
             }
 
 #ifdef LOG_STDIO
             std::cout << "Assigning task " << orderId << " to robot " << nearestRobot << std::endl;
 #endif
             auto& robot = m_robots[nearestRobot];
-            robot.orders.push_back(orderId);
-            std::swap(order->approachPath.points, robot.tmpPath);
+            robot.sites.push_back(order->siteIndex);
+            m_search.tracePath(robot.pos.x, robot.pos.y, robot.approachPath.points);
 #ifdef LOG_SVG
             drawer.drawPath(order->approachPath.points);
 #endif
             assignedOrders.push_back(orderId);
-                }
+        }
         for (auto orderId : assignedOrders)
             m_freeOrders.erase(orderId);
-            }
+    }
 
     void prepareTurn()
     {
@@ -1165,43 +1168,61 @@ public:
         for (int r = 0; r < m_robots.size(); r++)
         {
             auto& robot = m_robots[r];
-            if (robot.orders.empty())
+            if (robot.order == -1 && robot.sites.empty())
             {
                 // TODO: should we clean up command log?
                 continue;
             }
-            int orderId = robot.orders.front();
-            Order* order = m_orders[orderId].get();
-            assert(order);
+
             // We have some order but we have not started processing it.
             if (robot.state == Robot::State::Idle)
             {
                 // Start moving towards pickup point.
-                robot.state = Robot::State::MovingStart;
-                robot.pathPosition = 0;
-                assert(robot.pos == order->approachPath[0]);
-            }
+                if (!robot.sites.empty())
+                {
+                    robot.state = Robot::State::MovingStart;
+                    robot.pathPosition = 0;
+                    assert(robot.pos == robot.approachPath[0]);
+                }
+        }
 
             if (robot.state == Robot::State::MovingStart)
             {
                 // Move across the path
-                if (robot.pathPosition < order->approachPath.points.size() - 1)
+                if (robot.pathPosition < robot.approachPath.points.size() - 1)
                 {
                     robot.pathPosition++;
-                    robot.stepTo(order->approachPath[robot.pathPosition], tick);
+                    robot.stepTo(robot.approachPath[robot.pathPosition], tick);
                 }
                 else
                 {
                     // Final position.
                     robot.pathPosition = 0;
-                    robot.commands[tick] = Robot::Command::Pick;
-                    robot.state = Robot::State::MovingFinish;
-                    assert(robot.pos == order->deliveryPath[0]);
-                    assert(robot.pos == order->start);
+                    assert(!robot.sites.empty());
+                    int siteIndex = robot.sites.front();
+                    robot.sites.pop_front();
+                    Site& site = m_sites[siteIndex];
+                    int orderIndex = site.popOrder();
+                    if (orderIndex >= 0)
+                    {
+                        auto* order = m_orders[orderIndex].get();
+                        assert(order);
+                        assert(robot.pos == order->deliveryPath[0]);
+                        assert(robot.pos == order->start);
+                        robot.order = orderIndex;
+                        robot.commands[tick] = Robot::Command::Pick;
+                        robot.state = Robot::State::MovingFinish;
+                    }
+                    else
+                    {
+                        robot.commands[tick] = Robot::Command::Idle;
+                        robot.state = Robot::State::Idle;
+                    }
                 }
             }
             else if (robot.state == Robot::State::MovingFinish)
             {
+                auto* order = m_orders[robot.order].get();
                 // Move across the path
                 if (robot.pathPosition < order->deliveryPath.points.size() - 1)
                 {
@@ -1215,11 +1236,11 @@ public:
                     robot.commands[tick] = Robot::Command::Drop;
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
-                    robot.orders.pop_front();
+                    robot.order = -1;
                 }
             }
-        }
     }
+}
 
     void publishInitialPositions()
     {
@@ -1248,6 +1269,40 @@ public:
 public:
     std::vector<std::unique_ptr<Order>> m_orders;
 
+    struct Site
+    {
+        Point2 pos;
+        // Unassigned orders from this site.
+        std::set<int> orders;
+
+        int popOrder()
+        {
+            if (orders.empty())
+                return -1;
+            int order = *orders.begin();
+            orders.erase(order);
+            return order;
+        }
+    };
+
+    std::vector<Site> m_sites;
+
+    std::map<Point2, int> m_siteMap;
+
+    int getSiteIndex(const Point2& pt)
+    {
+        auto it = m_siteMap.find(pt);
+        if (it == m_siteMap.end())
+        {
+            Site site;
+            site.pos = pt;
+            m_sites.push_back(site);
+            m_siteMap[pt] = m_sites.size() - 1;
+            return m_sites.size() - 1;
+        }
+        return it->second;
+    }
+
 protected:
     SearchGrid m_search;
     GroupSearchPredicate m_groupPred;
@@ -1255,7 +1310,8 @@ protected:
     std::vector<Robot> m_robots;
     // A list of IDs of free orders.
     std::set<int> m_freeOrders;
-        };
+};
+
 /// END_DISPATCHER_H
 
 /// MAIN_CPP
