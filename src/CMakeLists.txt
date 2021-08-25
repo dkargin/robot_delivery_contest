@@ -2,7 +2,6 @@ add_executable(robot_dispatcher
 	pathfinder.h
 	dispatcher.h
 	dispatcher.cpp
-	problem_parser.h
 	svg.h
 	svg.cpp
 	draw.h
@@ -16,3 +15,5 @@ if (LOG_SVG)
 endif ()
 
 target_compile_definitions(robot_dispatcher PUBLIC ${DEFINES})
+
+add_executable(final final.cpp)
