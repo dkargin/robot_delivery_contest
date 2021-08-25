@@ -206,12 +206,14 @@ public:
         m_orders.reserve(maxOrders);
 
         int needRobots = avgTimeToDeliver / orderDelay;
+        needRobots *= 1.5;
         if (needRobots < 1)
             needRobots = 1;
         if (needRobots > 100)
             needRobots = 100;
         int maxRevenue = maxOrders * orderPrice;
         int expectedRevenue = maxRevenue - needRobots * robotPrice - avgTimeToDeliver * maxOrders;
+        m_parkCost = needRobots * robotPrice;
 #ifdef LOG_STDIO
         std::cout << "Avg order delay = " << orderDelay
             << ". Avg delivery time = " << avgTimeToDeliver << " steps."
@@ -493,9 +495,11 @@ public:
     }
 
     // Total revenue.
-    uint64_t m_revenue = 0;
+    int64_t m_revenue = 0;
     // Loss of revenue due to long delivery.
-    uint64_t m_revenueLoss = 0;
+    int64_t m_revenueLoss = 0;
+    // Cost of all allocated robots.
+    int64_t m_parkCost = 0;
 
 protected:
     SearchGrid m_search;

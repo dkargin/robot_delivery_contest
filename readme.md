@@ -69,3 +69,31 @@ Removed extra pathfinding:
 Done in 49061ms.
 Managed to process only 36354 steps out of 100000 (36%)
 ```
+
+# Tuning revenue at 08 #
+
+Initial revenue and losses:
+
+```
+Done in 51737ms.
+Revenue=12747388. Loss=25679232
+Managed to process only 34385 steps out of 100000 (34%)
+```
+
+Multiplied necessary robots by 1.5:
+
+```
+Done in 55054ms.
+Revenue=16436670. Loss=19779850
+Managed to process only 32069 steps out of 100000 (32%)
+```
+
+Multiplied necessary robots by 1.9:
+
+```
+Done in 56429ms.
+Revenue=19581027. Loss=16181967
+Managed to process only 31335 steps out of 100000 (31%)
+```
+
+We've managed to 
