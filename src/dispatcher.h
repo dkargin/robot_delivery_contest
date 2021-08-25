@@ -237,6 +237,9 @@ public:
         {
             m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
+            int siteIndex = getSiteIndex(order.start);
+            m_sites[siteIndex].orders.insert(o);
+            order.siteIndex = siteIndex;
         }
 
         std::vector<int> robotCandidates;
@@ -260,7 +263,7 @@ public:
             {
                 const Robot& robot = m_robots[r];
                 // Skip robots which are occupied now.
-                if (!robot.orders.empty())
+                if (!robot.isIdle())
                 {
                     // TODO: can queue tasks.
                     continue;
@@ -314,8 +317,8 @@ public:
             std::cout << "Assigning task " << orderId << " to robot " << nearestRobot << std::endl;
 #endif
             auto& robot = m_robots[nearestRobot];
-            robot.orders.push_back(orderId);
-            m_search.tracePath(robot.pos.x, robot.pos.y, order->approachPath.points);
+            robot.sites.push_back(order->siteIndex);
+            m_search.tracePath(robot.pos.x, robot.pos.y, robot.approachPath.points);
 #ifdef LOG_SVG
             drawer.drawPath(order->approachPath.points);
 #endif
@@ -336,43 +339,61 @@ public:
         for (int r = 0; r < m_robots.size(); r++)
         {
             auto& robot = m_robots[r];
-            if (robot.orders.empty())
+            if (robot.order == -1 && robot.sites.empty())
             {
                 // TODO: should we clean up command log?
                 continue;
             }
-            int orderId = robot.orders.front();
-            Order* order = m_orders[orderId].get();
-            assert(order);
+
             // We have some order but we have not started processing it.
             if (robot.state == Robot::State::Idle)
             {
                 // Start moving towards pickup point.
-                robot.state = Robot::State::MovingStart;
-                robot.pathPosition = 0;
-                assert(robot.pos == order->approachPath[0]);
+                if (!robot.sites.empty())
+                {
+                    robot.state = Robot::State::MovingStart;
+                    robot.pathPosition = 0;
+                    assert(robot.pos == robot.approachPath[0]);
+                }
             }
 
             if (robot.state == Robot::State::MovingStart)
             {
                 // Move across the path
-                if (robot.pathPosition < order->approachPath.points.size() - 1)
+                if (robot.pathPosition < robot.approachPath.points.size() - 1)
                 {
                     robot.pathPosition++;
-                    robot.stepTo(order->approachPath[robot.pathPosition], tick);
+                    robot.stepTo(robot.approachPath[robot.pathPosition], tick);
                 }
                 else
                 {
                     // Final position.
                     robot.pathPosition = 0;
-                    robot.commands[tick] = Robot::Command::Pick;
-                    robot.state = Robot::State::MovingFinish;
-                    assert(robot.pos == order->deliveryPath[0]);
-                    assert(robot.pos == order->start);
+                    assert(!robot.sites.empty());
+                    int siteIndex = robot.sites.front();
+                    robot.sites.pop_front();
+                    Site& site = m_sites[siteIndex];
+                    int orderIndex = site.popOrder();
+                    if (orderIndex >= 0)
+                    {
+                        auto* order = m_orders[orderIndex].get();
+                        assert(order);
+                        assert(robot.pos == order->deliveryPath[0]);
+                        assert(robot.pos == order->start);
+                        robot.order = orderIndex;
+                        robot.commands[tick] = Robot::Command::Pick;
+                        robot.state = Robot::State::MovingFinish;
+                    }
+                    else
+                    {
+                        robot.commands[tick] = Robot::Command::Idle;
+                        robot.state = Robot::State::Idle;
+                    }
                 }
             }
             else if (robot.state == Robot::State::MovingFinish)
             {
+                auto* order = m_orders[robot.order].get();
                 // Move across the path
                 if (robot.pathPosition < order->deliveryPath.points.size() - 1)
                 {
@@ -386,7 +407,7 @@ public:
                     robot.commands[tick] = Robot::Command::Drop;
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
-                    robot.orders.pop_front();
+                    robot.order = -1;
                 }
             }
         }
@@ -421,8 +442,18 @@ public:
 
     struct Site
     {
+        Point2 pos;
         // Unassigned orders from this site.
         std::set<int> orders;
+
+        int popOrder()
+        {
+            if (orders.empty())
+                return -1;
+            int order = *orders.begin();
+            orders.erase(order);
+            return order;
+        }
     };
 
     std::vector<Site> m_sites;
@@ -434,7 +465,9 @@ public:
         auto it = m_siteMap.find(pt);
         if (it == m_siteMap.end())
         {
-            m_sites.emplace_back();
+            Site site;
+            site.pos = pt;
+            m_sites.push_back(site);
             m_siteMap[pt] = m_sites.size() - 1;
             return m_sites.size() - 1;
         }

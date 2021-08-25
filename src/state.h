@@ -89,9 +89,6 @@ struct Order
     /// Path from start to finish.
     Path deliveryPath;
 
-    /// Path from current position of a robot to pickup point.
-    Path approachPath;
-
     /// Check if order is assigned to any robot.
     bool isAssigned() const
     {
@@ -101,11 +98,6 @@ struct Order
     int deliveryDistance() const
     {
         return (int)deliveryPath.points.size();
-    }
-
-    int approachDistance() const
-    {
-        return (int)approachPath.points.size();
     }
 };
 
@@ -160,10 +152,14 @@ struct Robot {
     /// Sequence of commands for current tick.
     std::vector<Command> commands;
 
+    /// Path from current position of a robot to pickup point.
+    Path approachPath;
+
+
     /// List of sites with orders.
     std::list<int> sites;
     /// Identifiers of assigned orders.
-    std::list<int> orders;
+    int order = -1;
     /// Position on current path.
     int pathPosition = -1;
 
@@ -205,6 +201,11 @@ struct Robot {
         }
         pos = newPos;
         commands[step] = cmd;
+    }
+
+    bool isIdle() const
+    {
+        return state == State::Idle && order == -1 && sites.empty();
     }
 };
 
