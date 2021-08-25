@@ -5,6 +5,7 @@
 #include <set>
 #include <list>
 #include <chrono>
+#include <memory>
 
 using Clock = std::chrono::steady_clock;
 using Duration = std::chrono::milliseconds;
