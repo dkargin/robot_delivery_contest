@@ -402,30 +402,28 @@ public:
         return m_width;
     }
 
+    inline void visitNode(int x, int y, Node* from)
+    {
+        constexpr int moveCost = 1;
+        int newCost = moveCost + from->cost;
+        if (isVisited(x, y) || isOccupied(x, y))
+            return;
+        Node* node = &m_grid[x + y * m_width];
+        auto index = nodeIndex(from);
+        addNode(x, y, newCost, index);
+    }
+
     void addAdjacentNodes(Node* from)
     {
-        auto index = nodeIndex(from);
-        auto visitNode = [this, index, from](int x, int y)
-            {
-                constexpr int moveCost = 1;
-                int newCost = moveCost + from->cost;
-                if (isVisited(x, y))
-                    return;
-                if (isOccupied(x, y))
-                    return;
-                Node* node = &m_grid[x + y * m_width];
-                addNode(x, y, newCost, index);
-            };
-
         auto pt = nodeCoords(from);
         if (pt.x > 0)
-            visitNode(pt.x - 1, pt.y);
+            visitNode(pt.x - 1, pt.y, from);
         if (pt.y > 0)
-            visitNode(pt.x, pt.y - 1);
+            visitNode(pt.x, pt.y - 1, from);
         if (pt.x < m_width - 1)
-            visitNode(pt.x + 1, pt.y);
+            visitNode(pt.x + 1, pt.y, from);
         if (pt.y < m_width - 1)
-            visitNode(pt.x, pt.y + 1);
+            visitNode(pt.x, pt.y + 1, from);
     }
 
     /// Trace back path from specified point.

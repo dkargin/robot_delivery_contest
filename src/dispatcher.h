@@ -232,12 +232,13 @@ public:
     {
         for (const auto& robot: m_robots)
         {
+            std::string out;
             for (auto cmd: robot.commands)
             {
                 char ch = Robot::cmdToChar(cmd);
-                std::cout << ch;
+                out.push_back(ch);
             }
-            std::cout << std::flush;
+            std::cout << out.c_str() << std::endl;
         }
     }
 
