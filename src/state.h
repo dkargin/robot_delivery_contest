@@ -65,7 +65,7 @@ struct Order
 
     int distance() const
     {
-        return path.points.size();
+        return (int)path.points.size();
     }
 };
 

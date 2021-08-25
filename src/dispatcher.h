@@ -93,7 +93,7 @@ public:
 
         for (size_t o = m_orders.size() - added; o < m_orders.size(); o++)
         {
-            m_freeOrders.push_back(o);
+            m_freeOrders.push_back((int)o);
             Order& order = *m_orders[o];
             // Finding path from start to finish.
             auto timeStart = Clock::now();
@@ -105,15 +105,22 @@ public:
             assert(result == SearchGrid::WaveResult::Goal);
             auto timeEnd = Clock::now();
             order.path.timeSearch = MS(timeStart, timeEnd);
-#ifdef LOG_SVG
-            char svgPath[255];
-            std::snprintf(svgPath, sizeof(svgPath), "tree_%d.svg", (int)o);
-            dumpPathfinder(m_search, svgPath);
-#endif
             auto traceStart = Clock::now();
             m_search.tracePath(order.start.x, order.start.y, order.path.points);
             auto traceEnd = Clock::now();
             order.path.timeTrace = MS(traceStart, traceEnd);
+#ifdef LOG_SVG
+            char svgPath[255];
+            std::snprintf(svgPath, sizeof(svgPath), "tree_o%d.svg", (int)o);
+            {
+                PathDrawer drawer(m_search, svgPath);
+                drawer.drawGrid(true, false, true);
+                drawer.drawStarts({ order.start });
+                drawer.drawTargets({ order.finish });
+                drawer.drawPath(order.path.points);
+            }
+#endif
+
 #ifdef LOG_STDIO
             std::cout << "Order #" << o << " length=" << order.distance()
                     << " wave in " << order.path.timeSearch.count() << "ms"
@@ -161,6 +168,15 @@ public:
             m_search.beginSearch();
             m_search.addNode(order->start.x, order->start.y, 0);
             auto waveResult = m_search.runWave(m_groupPred);
+
+            char svgPath[255];
+            std::snprintf(svgPath, sizeof(svgPath), "tree_mo%d.svg", (int)orderId);
+            {
+                PathDrawer drawer(m_search, svgPath);
+                drawer.drawGrid(true, false, true);
+                drawer.drawTargets(m_groupPred.targets);
+                drawer.drawStarts({ order->start });
+            }
             if (waveResult == SearchGrid::WaveResult::Collapsed)
                 throw std::runtime_error("Multiwave has collapsed");
 

@@ -8,4 +8,4 @@ add_executable(robot_dispatcher
 	draw.h
 	draw.cpp)
 
-target_compile_definitions(robot_dispatcher PUBLIC -DLOG_STDIO)
+target_compile_definitions(robot_dispatcher PUBLIC -DLOG_STDIO -DLOG_SVG)

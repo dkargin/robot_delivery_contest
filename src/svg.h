@@ -192,6 +192,18 @@ public:
             attrs << Attr("style", style);
     }
 
+    /// Draws a circle with a center at (x, y) and radius "r".
+    void circle(int x, int y, int radius, const char* fill, const char* style)
+    {
+        Tag tag(out(), "circle");
+        auto&& attrs = tag.attrs();
+        attrs << Attr("cx", x) << Attr("cy", y) << Attr("r", radius);
+        if (fill)
+            attrs << Attr("fill", fill);
+        if (style)
+            attrs << Attr("style", style);
+    }
+
     /// Draw vertical text.
     void vtext(int x, int y, const char* text, const char* style, const char* anchor = nullptr)
     {
