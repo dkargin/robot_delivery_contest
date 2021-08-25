@@ -204,6 +204,7 @@ public:
         // Average time for delivery.
         int avgTimeToDeliver = 2 * m_map.dimension;
         int orderDelay = 60 * maxSteps / maxOrders;
+        m_orders.reserve(maxOrders);
 
         int needRobots = avgTimeToDeliver / orderDelay;
         if (needRobots < 1)

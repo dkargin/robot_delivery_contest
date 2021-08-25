@@ -1275,6 +1275,8 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
+    auto timeStart = Clock::now();
+    int timeLimit = 18000;
     Dispatcher dispatcher(map);
     dispatcher.processIslands();
     dispatcher.calculateInitialPositions(parser.getMaxSteps(), parser.getMaxOrders(),
@@ -1287,12 +1289,17 @@ int main(int argc, const char* argv[])
         int added = parser.parseStepRequests(dispatcher.m_orders, 60 * step);
 
         // Process tasks and them to robots.
-        dispatcher.processNewOrders(added);
+        auto current = Clock::now();
+        // Stop everyone if we are reaching time limit.
+        if (MS(timeStart, current).count() < timeLimit)
+        {
+            dispatcher.processNewOrders(added);
 
-        dispatcher.prepareTurn();
-        for (int tick = 0; tick < 60; tick++)
-            dispatcher.moveRobots(step, tick);
+            dispatcher.prepareTurn();
 
+            for (int tick = 0; tick < 60; tick++)
+                dispatcher.moveRobots(step, tick);
+        }
         dispatcher.publishRobots();
     }
     return 0;
