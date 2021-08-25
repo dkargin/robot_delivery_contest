@@ -77,10 +77,8 @@ struct Order
 {
     Point2 start;
     Point2 finish;
-    /// Price of specific order.
-    int price;
     /// A time when this order has been placed.
-    int time;
+    uint64_t time = 0;
     /// ID of a robot which has taken this order.
     int robotId = -1;
 

@@ -69,6 +69,7 @@ int main(int argc, const char* argv[])
     auto timeFinish = Clock::now();
 #ifdef LOG_STDIO
     std::cout << "Done in " << MS(timeStart, timeFinish).count() << "ms." << std::endl;
+    std::cout << "Revenue=" << dispatcher.m_revenue << ". Loss=" << dispatcher.m_revenueLoss << std::endl;
     if (hitIterations != -1)
     {
         std::cout << "Managed to process only " << hitIterations

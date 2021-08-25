@@ -201,6 +201,8 @@ public:
         // Average time for delivery.
         int avgTimeToDeliver = 2 * m_map.dimension;
         int orderDelay = 60 * maxSteps / maxOrders;
+
+        m_orderPrice = orderPrice;
         m_orders.reserve(maxOrders);
 
         int needRobots = avgTimeToDeliver / orderDelay;
@@ -371,6 +373,7 @@ public:
                     if (orderIndex >= 0)
                     {
                         auto* order = m_orders[orderIndex].get();
+                        order->siteIndex = -1;
                         assert(order);
                         assert(robot.pos == order->deliveryPath[0]);
                         assert(robot.pos == order->start);
@@ -387,7 +390,8 @@ public:
             }
             else if (robot.state == Robot::State::MovingFinish)
             {
-                auto* order = m_orders[robot.order].get();
+                int orderIndex = robot.order;
+                auto* order = m_orders[orderIndex].get();
                 // Move across the path
                 if (robot.pathPosition < order->deliveryPath.points.size() - 1)
                 {
@@ -402,9 +406,28 @@ public:
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
                     robot.order = -1;
+                    closeOrder(step, tick, orderIndex);
                 }
             }
         }
+    }
+
+    void closeOrder(int step, int tick, int order)
+    {
+        uint64_t latency = step*60 + tick - m_orders[order]->time;
+        m_revenueLoss += latency;
+        uint64_t revenue = 0;
+        if (latency < m_orderPrice)
+        {
+            revenue = (m_orderPrice - latency);
+        }
+
+        m_revenue += revenue;
+
+        m_orders[order].reset();
+#ifdef LOG_STDIO
+        std::cout << "Order " << order << " is closed. Revenue =" << revenue << ", loss=" << latency << std::endl;
+#endif
     }
 
     void publishInitialPositions()
@@ -469,6 +492,11 @@ public:
         return it->second;
     }
 
+    // Total revenue.
+    uint64_t m_revenue = 0;
+    // Loss of revenue due to long delivery.
+    uint64_t m_revenueLoss = 0;
+
 protected:
     SearchGrid m_search;
     GroupSearchPredicate m_groupPred;
@@ -476,4 +504,6 @@ protected:
     std::vector<Robot> m_robots;
     // A list of IDs of free orders.
     std::set<int> m_freeOrders;
+
+    uint64_t m_orderPrice = 0;
 };
