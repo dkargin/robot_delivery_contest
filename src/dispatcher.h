@@ -1,7 +1,7 @@
 #pragma once
 
 #include <iostream>
-
+#include <cstdio>
 #include "pathfinder.h"
 
 #ifdef LOG_SVG
@@ -207,7 +207,7 @@ public:
         m_orders.reserve(maxOrders);
 
         int needRobots = avgTimeToDeliver / orderDelay;
-        needRobots *= 1.5;
+        needRobots *= 2;
         if (needRobots < 1)
             needRobots = 1;
         if (needRobots > 100)
@@ -243,7 +243,7 @@ public:
             m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
             int siteIndex = getSiteIndex(order.start);
-            m_sites[siteIndex].orders.insert(o);
+            m_sites[siteIndex].orders.insert((int)o);
             order.siteIndex = siteIndex;
         }
 
@@ -379,12 +379,12 @@ public:
                         assert(robot.pos == order->deliveryPath[0]);
                         assert(robot.pos == order->start);
                         robot.order = orderIndex;
-                        robot.commands[tick] = Robot::Command::Pick;
+                        robot.commands[tick] = 'T';
                         robot.state = Robot::State::MovingFinish;
                     }
                     else
                     {
-                        robot.commands[tick] = Robot::Command::Idle;
+                        robot.commands[tick] = 'S';
                         robot.state = Robot::State::Idle;
                     }
                 }
@@ -403,7 +403,7 @@ public:
                 {
                     // Final position.
                     robot.pathPosition = -1;
-                    robot.commands[tick] = Robot::Command::Drop;
+                    robot.commands[tick] = 'P';
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
                     robot.order = -1;
@@ -445,13 +445,7 @@ public:
     {
         for (auto& robot: m_robots)
         {
-            std::string out;
-            for (auto cmd: robot.commands)
-            {
-                char ch = Robot::cmdToChar(cmd);
-                out.push_back(ch);
-            }
-            std::cout << out.c_str() << std::endl;
+            puts(robot.commands);
             robot.clearCommands();
         }
     }

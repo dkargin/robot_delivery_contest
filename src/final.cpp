@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdint>
 #include <stdexcept>
+#include <iostream>
 #include <vector>
 #include <set>
 #include <map>
@@ -8,6 +9,7 @@
 #include <chrono>
 #include <memory>
 #include <algorithm>
+#include <cstdio>
 
 using Clock = std::chrono::steady_clock;
 using Duration = std::chrono::milliseconds;
@@ -77,10 +79,8 @@ struct Order
 {
     Point2 start;
     Point2 finish;
-    /// Price of specific order.
-    int price;
     /// A time when this order has been placed.
-    int time;
+    uint64_t time = 0;
     /// ID of a robot which has taken this order.
     int robotId = -1;
 
@@ -116,45 +116,11 @@ struct Robot {
     State state = State::Idle;
 
     Point2 pos;
-
-    enum class Command : char {
-        Idle,
-        Up,
-        Down,
-        Left,
-        Right,
-        Pick,
-        Drop,
-    };
-
-    static char cmdToChar(Command cmd)
-    {
-        switch (cmd)
-        {
-        case Command::Up:
-            return 'U';
-        case Command::Down:
-            return 'D';
-        case Command::Left:
-            return 'L';
-        case Command::Right:
-            return 'R';
-        case Command::Idle:
-            return 'S';
-        case Command::Pick:
-            return 'T';
-        case Command::Drop:
-            return 'P';
-        }
-        return 'S';
-    }
-
     /// Sequence of commands for current tick.
-    std::vector<Command> commands;
+    char commands[61] = {};
 
     /// Path from current position of a robot to pickup point.
     Path approachPath;
-
 
     /// List of sites with orders.
     std::list<int> sites;
@@ -165,35 +131,36 @@ struct Robot {
 
     Robot()
     {
-        commands.resize(60, Command::Idle);
+        commands[60] = 0;
+        clearCommands();
     }
 
     /// Clears command buffer.
     void clearCommands()
     {
         for (int i = 0; i < 60; i++)
-            commands[i] = Command::Idle;
+            commands[i] = 'S';
     }
 
     /// Moves robot to a specified point.
     void stepTo(const Point2& newPos, int step)
     {
-        Command cmd = Command::Idle;
+        char cmd = 'S';
         if (newPos.x == pos.x && newPos.y == pos.y + 1)
         {
-            cmd = Command::Down;
+            cmd = 'D';
         }
         else if (newPos.x == pos.x && newPos.y == pos.y - 1)
         {
-            cmd = Command::Up;
+            cmd = 'U';
         }
         else if (newPos.x == pos.x + 1 && newPos.y == pos.y)
         {
-            cmd = Command::Right;
+            cmd = 'R';
         }
         else if (newPos.x == pos.x - 1 && newPos.y == pos.y)
         {
-            cmd = Command::Left;
+            cmd = 'L';
         }
         else
         {
@@ -211,8 +178,19 @@ struct Robot {
 
 struct Map
 {
+    enum MoveFlags
+    {
+        Center = 1,
+        Left = 1 << 2,
+        Right = 1 << 3,
+        Up = 1 << 4,
+        Down = 1 << 5,
+    };
+
     /// Binary rows.
     std::vector<Row> occupancy;
+
+    std::vector<unsigned char> bakedOccupancy;
 
     /// Cached number of obstacles.
     int numObstacles = 0;
@@ -239,6 +217,29 @@ struct Map
     }
 
     std::vector<std::vector<int>> islands;
+
+    void bakeOccupancy()
+    {
+        bakedOccupancy.resize(dimension * dimension, 0);
+        int i = 0;
+        for (int y = 0; y < dimension; y++)
+        {
+            for (int x = 0; x < dimension; x++, i++)
+            {
+                auto& cell = bakedOccupancy[i];
+                if (isOccupied(x, y))
+                    cell |= Center;
+                if (x == 0 || isOccupied(x - 1, y))
+                    cell |= Left;
+                if (y == 0 || isOccupied(x, y - 1))
+                    cell |= Up;
+                if (x == dimension - 1 || isOccupied(x + 1, y))
+                    cell |= Right;
+                if (y == dimension - 1 || isOccupied(x, y + 1))
+                    cell |= Down;
+            }
+        }
+    }
 };
 
 /// END_STATE_H
@@ -257,11 +258,8 @@ public:
     /// Creates container for specified max size
     SearchContainerBH(size_t _size)
     {
-        peak = 0;
-        nodesVisited = 0;
         maxSize = _size;
         array.reserve(_size);
-        size = 0;
     }
 
     /// @brief Check if node is already stored in container
@@ -274,7 +272,7 @@ public:
     /// Get current size.
     size_t getSize() const
     {
-        return size;
+        return array.size();
     }
 
     size_t getMaxSize() const
@@ -287,32 +285,11 @@ public:
     {
         assert(node != NULL);
 
-        if (this->size == maxSize)
-        {
-            return false;
-        }
-
-        size_t v = size;
+        size_t v = array.size();
         size_t u = v;
 
-        int id = Traits::getID(node);
-
-        //check if node is already in container
-        if (id >= 0 && id < size && array[id] == node)
-        {
-            v = id;
-            u = v;
-            array[v] = node;
-        }
-        else
-        {
-            Traits::setID(node, v);
-            array.push_back(node);
-
-            nodesVisited++;
-            if (array.size() > peak)
-                peak = array.size();
-        }
+        Traits::setID(node, v);
+        array.push_back(node);
 
         while (v)
         {
@@ -331,7 +308,6 @@ public:
             else
                 break;
         }
-        size = array.size();
         return true;
     }
 
@@ -350,7 +326,7 @@ public:
         Traits::setID(array[0], 0);
 
         array.pop_back();
-        size = array.size();
+        size_t size = array.size();
 
         while (true)
         {
@@ -385,100 +361,10 @@ public:
         return res;
     }
 
-    NodeType* firstNode()
-    {
-        if (!array.empty())
-            return array.front();
-        return NULL;
-    }
-
-    NodeType* lastNode()
-    {
-        if (!array.empty())
-            return array.back();
-        return NULL;
-    }
-
-
-    /// remove Node from binary heap
-    void removeNode(NodeType* node)
-    {
-        assert(node != NULL);
-
-        long i = Traits::getID(node);
-        bool flag = false;// if we  have not found this node
-        // We cache array index for node
-        if (array[i] == node)
-        {
-            flag = true;
-        }
-        // Or we've failed to cache it, so we search this node manually
-        else
-        {
-            for (i = 0; i < size; i++)
-                if (node == array[i])
-                {
-                    flag = true;
-                    break;
-                }
-        }
-        if (!flag)
-            return;
-        // Swapping nodes
-        unsigned int chLeft = i;
-        unsigned int chRight = i;
-        unsigned int u = i;
-        unsigned int v = i;
-        size--;
-        array[i] = array[size];
-        Traits::setID(array[i], i);
-        array[size] = NULL;
-
-        while (true)
-        {
-            u = v;
-            chLeft = u * 2 + 1;
-            chRight = u * 2 + 2;;
-            if (2 * u + 2 < size)
-            {
-                if (Traits::compare(array[u], array[chLeft]))
-                    v = chLeft;
-                if (Traits::compare(array[v], array[chRight]))
-                    v = chRight;
-            }
-            else if (chLeft < size)
-            {
-                if (Traits::compare(array[u], array[chLeft]))
-                    v = chLeft;
-            }
-            if (u != v)
-            {
-                NodeType* tmp = array[u];
-                array[u] = array[v];
-                array[v] = tmp;
-
-                //fix ID's
-                Traits::setID(array[u], u);
-                Traits::setID(array[v], v);
-            }
-            else
-                break;
-        }
-    }
-
     /// Remove all contents
     void clear()
     {
-        nodesVisited = 0;
-        peak = 0;
-        size = 0;
-
         array.clear();
-    }
-
-    size_t getPeakSize() const
-    {
-        return peak;
     }
 
     size_t getSize()
@@ -487,13 +373,8 @@ public:
     }
 
 public:
-    // Current size of a heap.
-    size_t size;
     // Max size of a heap.
     size_t maxSize;
-    size_t peak;
-    // Number of nodes visited.
-    int nodesVisited;
     Array array;
 };
 
@@ -559,7 +440,6 @@ template<> struct ContainerTraits<Node>
     }
 };
 
-
 /**
  * Tricks used to achieve better performance.
  * 1. Priority queue is implemented by a binary heap. Searches for position in tree
@@ -600,6 +480,16 @@ public:
     Node* addNode(Coord x, Coord y, int cost, NodeID parentId = Node::InvalidID)
     {
         Node* node = &m_grid[x + m_width * y];
+        node->cost = cost;
+        node->parent = parentId;
+        node->waveId = m_lastWaveId;
+        m_priorityHeap.push(node);
+        return node;
+    }
+
+    Node* addNodeId(NodeID id, int cost, NodeID parentId)
+    {
+        Node* node = &m_grid[id];
         node->cost = cost;
         node->parent = parentId;
         node->waveId = m_lastWaveId;
@@ -661,6 +551,16 @@ public:
         addNode(x, y, newCost, index);
     }
 
+    inline void visitNodeId(NodeID to, Node* from)
+    {
+        constexpr int moveCost = 1;
+        int newCost = moveCost + from->cost;
+        if (m_grid[to].waveId == m_lastWaveId)
+            return;
+        auto index = nodeIndex(from);
+        addNodeId(to, newCost, index);
+    }
+
     void addAdjacentNodes(Node* from)
     {
         auto pt = nodeCoords(from);
@@ -672,6 +572,20 @@ public:
             visitNode(pt.x + 1, pt.y, from);
         if (pt.y < m_width - 1)
             visitNode(pt.x, pt.y + 1, from);
+    }
+
+    void addAdjacentNodesBaked(Node* from)
+    {
+        auto fromIndex = nodeIndex(from);
+        auto occ = m_map.bakedOccupancy[fromIndex];
+        if (!(occ & Map::Right))
+            visitNodeId(fromIndex + 1, from);
+        if (!(occ & Map::Up))
+            visitNodeId(fromIndex - m_width, from);
+        if (!(occ & Map::Left))
+            visitNodeId(fromIndex - 1, from);
+        if (!(occ & Map::Down))
+            visitNodeId(fromIndex + m_width, from);
     }
 
     /// Trace back path from specified point.
@@ -723,7 +637,9 @@ public:
                 break;
             }
 
-            addAdjacentNodes(top);
+            //addAdjacentNodes(top);
+            // Baked version is about 20-30% faster.
+            addAdjacentNodesBaked(top);
             iterations++;
         }
         if (findGoal)
@@ -742,7 +658,7 @@ protected:
 
     /// ID of last search.
     uint32_t m_lastWaveId = 0;
-};
+    };
 
 struct EmptySearchPredicate
 {
@@ -831,14 +747,8 @@ struct GroupSearchPredicate
 
 /// DISPATCHER_H
 
-#include <iostream>
-
-#ifdef LOG_SVG
-#include "draw.h"
-#endif
-
 /// Parser for input data:
-///  - obtstacle map
+///  - obstacle map
 ///  - delivery requests
 class ProblemParser
 {
@@ -926,7 +836,7 @@ public:
     int getMaxSteps() const
     {
         return m_numSteps;
-    }
+}
 
     int getRobotPrice() const
     {
@@ -984,6 +894,7 @@ public:
     /// Process connectivity components in a map.
     void processIslands()
     {
+        m_map.bakeOccupancy();
         // Indexes of available tiles.
         std::set<int> availableTiles;
 
@@ -1030,15 +941,19 @@ public:
         // Average time for delivery.
         int avgTimeToDeliver = 2 * m_map.dimension;
         int orderDelay = 60 * maxSteps / maxOrders;
+
+        m_orderPrice = orderPrice;
         m_orders.reserve(maxOrders);
 
         int needRobots = avgTimeToDeliver / orderDelay;
+        needRobots *= 2;
         if (needRobots < 1)
             needRobots = 1;
         if (needRobots > 100)
             needRobots = 100;
         int maxRevenue = maxOrders * orderPrice;
         int expectedRevenue = maxRevenue - needRobots * robotPrice - avgTimeToDeliver * maxOrders;
+        m_parkCost = needRobots * robotPrice;
 #ifdef LOG_STDIO
         std::cout << "Avg order delay = " << orderDelay
             << ". Avg delivery time = " << avgTimeToDeliver << " steps."
@@ -1067,7 +982,7 @@ public:
             m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
             int siteIndex = getSiteIndex(order.start);
-            m_sites[siteIndex].orders.insert(o);
+            m_sites[siteIndex].orders.insert((int)o);
             order.siteIndex = siteIndex;
         }
 
@@ -1094,7 +1009,6 @@ public:
                 // Skip robots which are occupied now.
                 if (!robot.isIdle())
                 {
-                    // TODO: can queue tasks.
                     continue;
                 }
                 m_groupPred.addTarget(robot.pos);
@@ -1164,7 +1078,6 @@ public:
             auto& robot = m_robots[r];
             if (robot.order == -1 && robot.sites.empty())
             {
-                // TODO: should we clean up command log?
                 continue;
             }
 
@@ -1200,23 +1113,25 @@ public:
                     if (orderIndex >= 0)
                     {
                         auto* order = m_orders[orderIndex].get();
+                        order->siteIndex = -1;
                         assert(order);
                         assert(robot.pos == order->deliveryPath[0]);
                         assert(robot.pos == order->start);
                         robot.order = orderIndex;
-                        robot.commands[tick] = Robot::Command::Pick;
+                        robot.commands[tick] = 'T';
                         robot.state = Robot::State::MovingFinish;
                     }
                     else
                     {
-                        robot.commands[tick] = Robot::Command::Idle;
+                        robot.commands[tick] = 'S';
                         robot.state = Robot::State::Idle;
                     }
+                    }
                 }
-            }
             else if (robot.state == Robot::State::MovingFinish)
             {
-                auto* order = m_orders[robot.order].get();
+                int orderIndex = robot.order;
+                auto* order = m_orders[orderIndex].get();
                 // Move across the path
                 if (robot.pathPosition < order->deliveryPath.points.size() - 1)
                 {
@@ -1227,13 +1142,32 @@ public:
                 {
                     // Final position.
                     robot.pathPosition = -1;
-                    robot.commands[tick] = Robot::Command::Drop;
+                    robot.commands[tick] = 'P';
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
                     robot.order = -1;
+                    closeOrder(step, tick, orderIndex);
                 }
             }
         }
+    }
+
+    void closeOrder(int step, int tick, int order)
+    {
+        uint64_t latency = step * 60 + tick - m_orders[order]->time;
+        m_revenueLoss += latency;
+        uint64_t revenue = 0;
+        if (latency < m_orderPrice)
+        {
+            revenue = (m_orderPrice - latency);
+        }
+
+        m_revenue += revenue;
+
+        m_orders[order].reset();
+#ifdef LOG_STDIO
+        std::cout << "Order " << order << " is closed. Revenue =" << revenue << ", loss=" << latency << std::endl;
+#endif
     }
 
     void publishInitialPositions()
@@ -1250,13 +1184,7 @@ public:
     {
         for (auto& robot : m_robots)
         {
-            std::string out;
-            for (auto cmd : robot.commands)
-            {
-                char ch = Robot::cmdToChar(cmd);
-                out.push_back(ch);
-            }
-            std::cout << out.c_str() << std::endl;
+            puts(robot.commands);
             robot.clearCommands();
         }
     }
@@ -1298,6 +1226,13 @@ public:
         return it->second;
     }
 
+    // Total revenue.
+    int64_t m_revenue = 0;
+    // Loss of revenue due to long delivery.
+    int64_t m_revenueLoss = 0;
+    // Cost of all allocated robots.
+    int64_t m_parkCost = 0;
+
 protected:
     SearchGrid m_search;
     GroupSearchPredicate m_groupPred;
@@ -1305,6 +1240,8 @@ protected:
     std::vector<Robot> m_robots;
     // A list of IDs of free orders.
     std::set<int> m_freeOrders;
+
+    uint64_t m_orderPrice = 0;
 };
 
 

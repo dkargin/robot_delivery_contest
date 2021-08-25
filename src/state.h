@@ -114,45 +114,11 @@ struct Robot {
     State state = State::Idle;
 
     Point2 pos;
-
-    enum class Command : char {
-        Idle,
-        Up,
-        Down,
-        Left,
-        Right,
-        Pick,
-        Drop,
-    };
-
-    static char cmdToChar(Command cmd)
-    {
-        switch(cmd)
-        {
-            case Command::Up:
-                return 'U';
-            case Command::Down:
-                return 'D';
-            case Command::Left:
-                return 'L';
-            case Command::Right:
-                return 'R';
-            case Command::Idle:
-                return 'S';
-            case Command::Pick:
-                return 'T';
-            case Command::Drop:
-                return 'P';
-        }
-        return 'S';
-    }
-
     /// Sequence of commands for current tick.
-    std::vector<Command> commands;
+    char commands[61] = {};
 
     /// Path from current position of a robot to pickup point.
     Path approachPath;
-
 
     /// List of sites with orders.
     std::list<int> sites;
@@ -163,35 +129,36 @@ struct Robot {
 
     Robot()
     {
-        commands.resize(60, Command::Idle);
+        commands[60] = 0;
+        clearCommands();
     }
 
     /// Clears command buffer.
     void clearCommands()
     {
         for (int i = 0; i < 60; i++)
-            commands[i] = Command::Idle;
+            commands[i] = 'S';
     }
 
     /// Moves robot to a specified point.
     void stepTo(const Point2& newPos, int step)
     {
-        Command cmd = Command::Idle;
+        char cmd = 'S';
         if (newPos.x == pos.x && newPos.y == pos.y + 1)
         {
-            cmd = Command::Down;
+            cmd = 'D';
         }
         else if (newPos.x == pos.x && newPos.y == pos.y - 1)
         {
-            cmd = Command::Up;
+            cmd = 'U';
         }
         else if (newPos.x == pos.x + 1 && newPos.y == pos.y)
         {
-            cmd = Command::Right;
+            cmd = 'R';
         }
         else if (newPos.x == pos.x - 1 && newPos.y == pos.y)
         {
-            cmd = Command::Left;
+            cmd = 'L';
         }
         else
         {
