@@ -171,11 +171,11 @@ struct Robot {
         }
         else if (newPos.x == pos.x + 1 && newPos.y == pos.y)
         {
-            cmd = Command::Left;
+            cmd = Command::Right;
         }
         else if (newPos.x == pos.x - 1 && newPos.y == pos.y)
         {
-            cmd = Command::Right;
+            cmd = Command::Left;
         }
         else
         {
