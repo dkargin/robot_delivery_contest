@@ -209,8 +209,19 @@ struct Robot {
 
 struct Map
 {
+    enum MoveFlags
+    {
+        Center = 1,
+        Left = 1<<2,
+        Right = 1<<3,
+        Up = 1<<4,
+        Down = 1<<5,
+    };
+
     /// Binary rows.
     std::vector<Row> occupancy;
+
+    std::vector<unsigned char> bakedOccupancy;
 
     /// Cached number of obstacles.
     int numObstacles = 0;
@@ -237,5 +248,28 @@ struct Map
     }
 
     std::vector<std::vector<int>> islands;
+
+    void bakeOccupancy()
+    {
+        bakedOccupancy.resize(dimension*dimension, 0);
+        int i = 0;
+        for (int y = 0; y < dimension; y++)
+        {
+            for (int x = 0; x < dimension; x++, i++)
+            {
+                auto& cell = bakedOccupancy[i];
+                if (isOccupied(x, y))
+                    cell |= Center;
+                if (x == 0 || isOccupied(x-1, y))
+                    cell |= Left;
+                if (y == 0 || isOccupied(x, y-1))
+                    cell |= Up;
+                if (x == dimension-1 || isOccupied(x+1, y))
+                    cell |= Right;
+                if (y == dimension-1 || isOccupied(x, y+1))
+                    cell |= Down;
+            }
+        }
+    }
 };
 

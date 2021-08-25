@@ -368,6 +368,16 @@ public:
         return node;
     }
 
+    Node* addNodeId(NodeID id, int cost, NodeID parentId)
+    {
+        Node* node = &m_grid[id];
+        node->cost = cost;
+        node->parent = parentId;
+        node->waveId = m_lastWaveId;
+        m_priorityHeap.push(node);
+        return node;
+    }
+
     /// Clears all the contents of the grid.
     void clearGrid()
     {
@@ -422,6 +432,16 @@ public:
         addNode(x, y, newCost, index);
     }
 
+    inline void visitNodeId(NodeID to, Node* from)
+    {
+        constexpr int moveCost = 1;
+        int newCost = moveCost + from->cost;
+        if (m_grid[to].waveId == m_lastWaveId)
+            return;
+        auto index = nodeIndex(from);
+        addNodeId(to, newCost, index);
+    }
+
     void addAdjacentNodes(Node* from)
     {
         auto pt = nodeCoords(from);
@@ -433,6 +453,20 @@ public:
             visitNode(pt.x + 1, pt.y, from);
         if (pt.y < m_width - 1)
             visitNode(pt.x, pt.y + 1, from);
+    }
+
+    void addAdjacentNodesBaked(Node* from)
+    {
+        auto fromIndex = nodeIndex(from);
+        auto occ = m_map.bakedOccupancy[fromIndex];
+        if (!(occ & Map::Right))
+            visitNodeId(fromIndex+1, from);
+        if (!(occ & Map::Up))
+            visitNodeId(fromIndex-m_width, from);
+        if (!(occ & Map::Left))
+            visitNodeId(fromIndex-1, from);
+        if (!(occ & Map::Down))
+            visitNodeId(fromIndex+m_width, from);
     }
 
     /// Trace back path from specified point.
@@ -484,7 +518,7 @@ public:
                 break;
             }
 
-            addAdjacentNodes(top);
+            addAdjacentNodesBaked(top);
             iterations++;
         }
         if (findGoal)

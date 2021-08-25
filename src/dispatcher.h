@@ -9,7 +9,7 @@
 #endif
 
 /// Parser for input data:
-///  - obtstacle map
+///  - obstacle map
 ///  - delivery requests
 class ProblemParser
 {
@@ -155,6 +155,7 @@ public:
     /// Process connectivity components in a map.
     void processIslands()
     {
+        m_map.bakeOccupancy();
         // Indexes of available tiles.
         std::set<int> availableTiles;
 
@@ -269,7 +270,6 @@ public:
                 // Skip robots which are occupied now.
                 if (!robot.isIdle())
                 {
-                    // TODO: can queue tasks.
                     continue;
                 }
                 m_groupPred.addTarget(robot.pos);
@@ -339,7 +339,6 @@ public:
             auto& robot = m_robots[r];
             if (robot.order == -1 && robot.sites.empty())
             {
-                // TODO: should we clean up command log?
                 continue;
             }
 
