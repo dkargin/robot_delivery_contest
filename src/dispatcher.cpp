@@ -52,14 +52,12 @@ int main(int argc, const char* argv[])
         // Calculate paths for each new request.
         int added = parser.parseStepRequests(dispatcher.m_orders, 60*step);
 
+        // Process tasks and them to robots.
         dispatcher.processNewOrders(added);
 
-        // Assign tasks to robots.
-        // TODO: for each task: find shortest path from task start to each of robots (or their finish points).
+        dispatcher.prepareTurn();
         for (int tick = 0; tick < 60; tick++)
-        {
-            // TODO: Make steps.
-        }
+            dispatcher.moveRobots(tick);
 
         dispatcher.publishRobots();
     }

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <set>
+#include <list>
 #include <chrono>
 
 using Clock = std::chrono::steady_clock;
@@ -42,6 +43,16 @@ struct Path
     Duration timeSearch;
     /// Time for backtracing.
     Duration timeTrace;
+
+    const Point2& operator[](int index) const
+    {
+        return points[index];
+    }
+
+    int distance() const
+    {
+        return (int)points.size();
+    }
 };
 
 struct Order
@@ -54,8 +65,12 @@ struct Order
     int time;
     /// ID of a robot which has taken this order.
     int robotId = -1;
+
     /// Path from start to finish.
-    Path path;
+    Path deliveryPath;
+
+    /// Path from current position of a robot to pickup point.
+    Path approachPath;
 
     /// Check if order is assigned to any robot.
     bool isAssigned() const
@@ -63,9 +78,14 @@ struct Order
         return robotId >= 0;
     }
 
-    int distance() const
+    int deliveryDistance() const
     {
-        return (int)path.points.size();
+        return (int)deliveryPath.points.size();
+    }
+
+    int approachDistance() const
+    {
+        return (int)approachPath.points.size();
     }
 };
 
@@ -81,6 +101,8 @@ struct Robot {
         /// Moving home.
         MovingHome
     };
+    State state = State::Idle;
+
     Point2 pos;
 
     enum class Command : char {
@@ -118,11 +140,49 @@ struct Robot {
     /// Sequence of commands for current tick.
     std::vector<Command> commands;
     /// Identifiers of assigned orders.
-    std::vector<int> orders;
+    std::list<int> orders;
+    /// Position on current path.
+    int pathPosition = -1;
 
     Robot()
     {
         commands.resize(60, Command::Idle);
+    }
+
+    /// Clears command buffer.
+    void beginStep()
+    {
+        for (int i = 0; i < 60; i++)
+            commands[i] = Command::Idle;
+    }
+
+    /// Moves robot to a specified point.
+    void stepTo(const Point2& newPos, int step)
+    {
+        Command cmd = Command::Idle;
+        if (newPos.x == pos.x && newPos.y == pos.y + 1)
+        {
+            cmd = Command::Down;
+        }
+        else if (newPos.x == pos.x && newPos.y == pos.y - 1)
+        {
+            cmd = Command::Up;
+        }
+        else if (newPos.x == pos.x + 1 && newPos.y == pos.y)
+        {
+            cmd = Command::Left;
+        }
+        else if (newPos.x == pos.x - 1 && newPos.y == pos.y)
+        {
+            cmd = Command::Right;
+        }
+        else
+        {
+            // Invalid step.
+            assert(false);
+        }
+        pos = newPos;
+        commands[step] = cmd;
     }
 
     std::vector<Point2> tmpPath;

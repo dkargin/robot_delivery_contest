@@ -109,11 +109,11 @@ public:
             auto result = m_search.runWave(pred);
             assert(result == SearchGrid::WaveResult::Goal);
             auto timeEnd = Clock::now();
-            order.path.timeSearch = MS(timeStart, timeEnd);
+            order.deliveryPath.timeSearch = MS(timeStart, timeEnd);
             auto traceStart = Clock::now();
-            m_search.tracePath(order.start.x, order.start.y, order.path.points);
+            m_search.tracePath(order.start.x, order.start.y, order.deliveryPath.points);
             auto traceEnd = Clock::now();
-            order.path.timeTrace = MS(traceStart, traceEnd);
+            order.deliveryPath.timeTrace = MS(traceStart, traceEnd);
 #ifdef LOG_SVG
             char svgPath[255];
             std::snprintf(svgPath, sizeof(svgPath), "tree_o%d.svg", (int)o);
@@ -127,9 +127,9 @@ public:
 #endif
 
 #ifdef LOG_STDIO
-            std::cout << "Order #" << o << " length=" << order.distance()
-                    << " wave in " << order.path.timeSearch.count() << "ms"
-                    << " trace in " << order.path.timeTrace.count() << std::endl;
+            std::cout << "Order #" << o << " length=" << order.deliveryDistance()
+                    << " wave in " << order.deliveryPath.timeSearch.count() << "ms"
+                    << " trace in " << order.deliveryPath.timeTrace.count() << std::endl;
 #endif
         }
 
@@ -204,10 +204,76 @@ public:
 #endif
             auto& robot = m_robots[nearestRobot];
             robot.orders.push_back(orderId);
+            std::swap(order->approachPath.points, robot.tmpPath);
 #ifdef LOG_SVG
-            drawer.drawPath(robot.tmpPath);
+            drawer.drawPath(rorder->approachPath.points);
 #endif
             removeFreeOrder(i);
+        }
+    }
+
+    void prepareTurn()
+    {
+        for (auto& robot : m_robots)
+            robot.beginStep();
+    }
+
+    void moveRobots(int tick)
+    {
+        for (int r = 0; r < m_robots.size(); r++)
+        {
+            auto& robot = m_robots[r];
+            if (robot.orders.empty())
+            {
+                // TODO: should we clean up command log?
+                continue;
+            }
+            int orderId = robot.orders.front();
+            Order* order = m_orders[orderId].get();
+            assert(order);
+            // We have some order but we have not started processing it.
+            if (robot.state == Robot::State::Idle)
+            {
+                // Start moving towards pickup point.
+                robot.state = Robot::State::MovingStart;
+                robot.pathPosition = 0;
+                assert(robot.pos == order->approachPath[0]);
+            }
+
+            if (robot.state == Robot::State::MovingStart)
+            {
+                // Move across the path
+                if (robot.pathPosition < order->approachPath.points.size() - 1)
+                {
+                    robot.pathPosition++;
+                    robot.stepTo(order->approachPath[robot.pathPosition], tick);
+                }
+                else
+                {
+                    // Final position.
+                    robot.pathPosition = 0;
+                    robot.commands[tick] = Robot::Command::Pick;
+                    robot.state = Robot::State::MovingFinish;
+                    assert(robot.pos == order->deliveryPath[0]);
+                }
+            }
+            else if (robot.state == Robot::State::MovingFinish)
+            {
+                // Move across the path
+                if (robot.pathPosition < order->deliveryPath.points.size() - 1)
+                {
+                    robot.pathPosition++;
+                    robot.stepTo(order->deliveryPath[robot.pathPosition], tick);
+                }
+                else
+                {
+                    // Final position.
+                    robot.pathPosition = 0;
+                    robot.commands[tick] = Robot::Command::Down;
+                    robot.state = Robot::State::Idle;
+                    robot.orders.pop_front();
+                }
+            }
         }
     }
 
