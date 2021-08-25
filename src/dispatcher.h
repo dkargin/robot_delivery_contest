@@ -41,14 +41,16 @@ public:
             m_search.addNode(pt.x, pt.y, 0);
             m_search.runWave(ep);
             std::vector<int> selection;
+            std::vector<Point2> ptSelection;
             for (int row = 0; row < m_map.dimension; row++) {
                 for (int col = 0; col < m_map.dimension; col++) {
-                    auto index = m_map.index(col, row);
+                    int index = m_map.index(col, row);
                     auto* node = m_search.getNode(col, row);
-                    if (node->waveId == searchId)
+                    if (node->waveId == searchId && !m_map.isOccupied(col, row))
                     {
                         availableTiles.erase(index);
                         selection.push_back(index);
+                        ptSelection.push_back(Point2(col, row));
                     }
                 }
             }
@@ -56,6 +58,7 @@ public:
             std::cout << "Generated island with " << selection.size() << " elements" << std::endl;
 #endif
             m_map.islands.push_back(std::move(selection));
+            m_map.ptIslands.push_back(std::move(ptSelection));
         } while (!availableTiles.empty());
     }
 
@@ -82,8 +85,10 @@ public:
             int islandIndex = rand() % m_map.islands.size();
             const auto& island = m_map.islands[islandIndex];
             // Choosing a random available position for now.
-            int positionIndex = rand() % island.size();
-            m_robots[i].pos = m_map.indexToCoord(positionIndex);
+            int positionIndex = island[rand() % island.size()];
+            auto pos = m_map.indexToCoord(positionIndex);
+            m_robots[i].pos = pos;
+            assert(!m_map.isOccupied(pos.x, pos.y));
         }
     }
 

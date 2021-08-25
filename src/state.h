@@ -141,7 +141,7 @@ struct Map
     /// Returns an index of a tile (x, y)
     int index(Coord x, Coord y) const
     {
-        return x + y * dimension;
+        return (int)x + (int)y * dimension;
     }
 
     Point2 indexToCoord(int index) const
@@ -158,5 +158,6 @@ struct Map
     }
 
     std::vector<std::vector<int>> islands;
+    std::vector<std::vector<Point2>> ptIslands;
 };
 
