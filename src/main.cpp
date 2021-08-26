@@ -1,5 +1,6 @@
 #include <fstream>
 
+#define LOCAL_TEST
 #include "dispatcher.h"
 
 int main(int argc, const char* argv[])

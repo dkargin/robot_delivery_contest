@@ -1,5 +1,8 @@
 #include "draw.h"
 
+#define LOCAL_TEST
+#include "dispatcher.h"
+
 namespace {
     constexpr int charWidth = 8;
     // Spacing between adjacent blocks.

@@ -1,5 +1,8 @@
+#include <vector>
 #include "svg.h"
-#include "pathfinder.h"
+
+class SearchGrid;
+struct Point2;
 
 struct PathDrawer
 {
