@@ -163,7 +163,7 @@ public:
     {
         m_simStart = simStart;
 
-        m_simEndLimit = m_simStart + std::chrono::duration_cast<PClock::duration>(std::chrono::milliseconds(19900));
+        m_simEndLimit = m_simStart + std::chrono::duration_cast<PClock::duration>(std::chrono::milliseconds(19500));
     }
 
     /// Process connectivity components in a map.
@@ -186,6 +186,7 @@ public:
             return;
         EmptySearchPredicate ep;
         // 1. Estimate connectivity components. We can have disconnected map.
+        m_maxPathCost = 0;
         do {
             auto index = *availableTiles.begin();
             auto pt = m_map.indexToCoord(index);
@@ -199,6 +200,8 @@ public:
                     auto* node = m_search.getNode(col, row);
                     if (node->waveId == searchId && !m_map.isOccupied(col, row))
                     {
+                        if (m_maxPathCost < node->cost)
+                            m_maxPathCost++;
                         availableTiles.erase(index);
                         selection.push_back(index);
                     }
@@ -214,14 +217,19 @@ public:
     void calculateInitialPositions(int maxSteps, int maxOrders, int orderPrice, int robotPrice)
     {
         // Average time for delivery.
-        int avgTimeToDeliver = 2 * m_map.dimension;
+        //int maxCells = 0;
+        //for (const auto& island : m_map.islands)
+        //    maxCells += island.size();
+        int avgTimeToDeliver = 1.5*m_maxPathCost;// 2 * sqrt(maxCells);
         int orderDelay = 60 * maxSteps / maxOrders;
 
         m_orderPrice = orderPrice;
         m_orders.reserve(maxOrders);
 
-        int needRobots = avgTimeToDeliver / orderDelay;
-        needRobots *= 2;
+        int needRobots = avgTimeToDeliver / orderDelay + 1;
+        // The situation when we have considerable delivery time for each robot.
+        if (avgTimeToDeliver * 3 > orderPrice)
+            needRobots *= 8;
         if (needRobots < 1)
             needRobots = 1;
         if (needRobots > 100)
@@ -255,6 +263,7 @@ public:
         {
             m_freeOrders.insert((int)o);
             Order& order = *m_orders[o];
+            order.id = o;
             int siteIndex = getSiteIndex(order.start);
             m_sites[siteIndex].orders.insert((int)o);
             order.siteIndex = siteIndex;
@@ -285,11 +294,18 @@ public:
             {
                 const Robot& robot = m_robots[r];
                 // Skip robots which are occupied now.
-                if (!robot.isIdle())
+                if (!robot.isIdle()/* && robot.state != Robot::State::MovingFinish*/)
                 {
                     continue;
                 }
-                m_groupPred.addTarget(robot.pos);
+                if (robot.state == Robot::State::MovingFinish)
+                {
+                    //m_groupPred.addTarget(robot.);
+                }
+                else
+                {
+                    m_groupPred.addTarget(robot.pos);
+                }
                 robotCandidates.push_back(r);
             }
 
@@ -334,7 +350,7 @@ public:
                     const auto* node = m_search.getNode(robot.pos.x, robot.pos.y);
                     if (!m_search.isVisited(node))
                         continue;
-                    int distance = node->cost;
+                    int distance = node->cost + robot.timeToFree();
                     if (distance < nearestDistance || nearestRobot == -1)
                     {
                         nearestRobot = r;
@@ -370,7 +386,7 @@ public:
         for (int r = 0; r < m_robots.size(); r++)
         {
             auto& robot = m_robots[r];
-            if (robot.order == -1 && robot.sites.empty())
+            if (robot.order == nullptr && robot.sites.empty())
             {
                 continue;
             }
@@ -412,7 +428,8 @@ public:
                         assert(order);
                         assert(robot.pos == order->deliveryPath[0]);
                         assert(robot.pos == order->start);
-                        robot.order = orderIndex;
+                        robot.order = order;
+                        robot.pathLeft = order->deliveryDistance();
                         robot.commands[tick] = 'T';
                         robot.state = Robot::State::MovingFinish;
                     }
@@ -426,12 +443,12 @@ public:
             }
             else if (robot.state == Robot::State::MovingFinish)
             {
-                int orderIndex = robot.order;
-                auto* order = m_orders[orderIndex].get();
+                auto* order = robot.order;
                 // Move across the path
                 if (robot.pathPosition < order->deliveryPath.points.size() - 1)
                 {
                     robot.pathPosition++;
+                    robot.pathLeft--;
                     robot.stepTo(order->deliveryPath[robot.pathPosition], tick);
                 }
                 else
@@ -440,18 +457,25 @@ public:
                     robot.pathPosition = -1;
                     robot.commands[tick] = 'P';
                     assert(robot.pos == order->finish);
-                    robot.state = Robot::State::Idle;
-                    robot.order = -1;
-                    m_inactiveRobots++;
-                    closeOrder(step, tick, orderIndex);
+                    if (robot.sites.empty())
+                    {
+                        robot.state = Robot::State::Idle;
+                        m_inactiveRobots++;
+                    }
+                    else
+                    {
+
+                    }
+                    robot.order = nullptr;
+                    closeOrder(step, tick, order);
                 }
             }
         }
     }
 
-    void closeOrder(int step, int tick, int order)
+    void closeOrder(int step, int tick, Order* order)
     {
-        uint64_t latency = step*60 + tick - m_orders[order]->time;
+        uint64_t latency = step*60 + tick - order->time;
         m_revenueLoss += latency;
         uint64_t revenue = 0;
         if (latency < m_orderPrice)
@@ -460,8 +484,7 @@ public:
         }
 
         m_revenue += revenue;
-
-        m_orders[order].reset();
+        m_orders[order->id].reset();
 #ifdef LOG_STDIO
         std::cout << "Order " << order << " is closed. Revenue =" << revenue << ", loss=" << latency << std::endl;
 #endif
@@ -480,13 +503,17 @@ public:
     {
         registerNewOrders(tasksAdded);
 
-        processNewOrders();
+        if (!halt)
+            processNewOrders();
 
-        for (int tick = 0; tick < 60; tick++)
+        if (!halt || m_inactiveRobots > 0)
         {
-            moveRobots(step, tick);
-            if (m_inactiveRobots > 0)
-                processNewOrders();
+            for (int tick = 0; tick < 60; tick++)
+            {
+                moveRobots(step, tick);
+                if (m_inactiveRobots > 0)
+                    processNewOrders();
+            }
         }
     }
 
@@ -499,7 +526,7 @@ public:
         publishInitialPositions();
 
         int hitIterations = -1;
-        constexpr int maxTimeMs = 18000;
+        constexpr int maxTimeMs = 10000;
 
         // A first step when we start considering timeout.
         int considerTimeoutStep = 2000;
@@ -583,7 +610,7 @@ public:
                 << " steps out of " << parser.getMaxSteps()
                 << " (" << (100 * hitIterations / parser.getMaxSteps()) << "%)" << std::endl;
 
-            std::cout << "Limited revenue=" << hitRevenue
+            std::cout << "Limited revenue=" << hitRevenue - m_parkCost
                 << " limited loss=" << hitLoss << std::endl;
         }
 #endif
@@ -660,6 +687,8 @@ protected:
     int m_inactiveRobots = 0;
     // Number of robots which are finishing current task.
     int m_finishingRobots = 0;
+
+    int m_maxPathCost = 0;
     // Starting time point for simulation.
     PClock::time_point m_simStart;
     // Time point when we must finish all calculations.

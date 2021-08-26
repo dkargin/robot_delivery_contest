@@ -33,7 +33,7 @@ public:
     /// Get current size.
     size_t getSize() const
     {
-        return size;
+        return array.size();
     }
 
     size_t getMaxSize() const

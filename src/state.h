@@ -30,7 +30,6 @@ using Row = std::vector<bool>;
 /// A type for all coordinates.
 using Coord = uint16_t;
 
-
 struct Point2
 {
     Coord x = 0;
@@ -86,6 +85,8 @@ struct Order
     Point2 finish;
     /// A time when this order has been placed.
     uint64_t time = 0;
+    // Own id.
+    int id = -1;
     /// ID of a robot which has taken this order.
     int robotId = -1;
 
@@ -130,9 +131,11 @@ struct Robot {
     /// List of sites with orders.
     std::list<int> sites;
     /// Identifiers of assigned orders.
-    int order = -1;
+    Order* order = nullptr;
     /// Position on current path.
     int pathPosition = -1;
+
+    int pathLeft = 0;
 
     Robot()
     {
@@ -167,6 +170,10 @@ struct Robot {
         {
             cmd = 'L';
         }
+        else if (newPos.x == pos.x && newPos.y == pos.y)
+        {
+            cmd = 'S';
+        }
         else
         {
             throw std::runtime_error("Invalid step");
@@ -177,7 +184,14 @@ struct Robot {
 
     bool isIdle() const
     {
-        return state == State::Idle && order == -1 && sites.empty();
+        return state == State::Idle && order == nullptr && sites.empty();
+    }
+
+    int timeToFree() const
+    {
+        if (state == State::MovingFinish)
+            return pathLeft;
+        return 0;
     }
 };
 

@@ -38,6 +38,6 @@ int main(int argc, const char* argv[])
         return -1;
     }
     Dispatcher dispatcher(map, simStart);
-    dispatcher.runSimulation(parser, false);
+    dispatcher.runSimulation(parser, true);
     return 0;
 }

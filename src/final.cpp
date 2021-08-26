@@ -12,11 +12,18 @@
 #include <cstdio>
 
 using Clock = std::chrono::steady_clock;
+using PClock = Clock;// std::chrono::high_resolution_clock;
 using Duration = std::chrono::milliseconds;
 
 inline auto MS(const Clock::time_point& from, const Clock::time_point& to)
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(to - from);
+}
+
+template <class _Rep, class _Period>
+inline auto MS(const std::chrono::duration<_Rep, _Period>& duration)
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration);
 }
 
 /// A single row in a compact occupancy map.
@@ -241,6 +248,7 @@ struct Map
         }
     }
 };
+
 
 /// END_STATE_H
 
@@ -515,6 +523,11 @@ public:
         return Point2(index % m_width, index / m_width);
     }
 
+    NodeID pointIndex(const Point2& pt) const
+    {
+        return pt.x + pt.y * m_width;
+    }
+
     bool isOccupied(Coord x, Coord y) const
     {
         return m_map.isOccupied(x, y);
@@ -523,6 +536,11 @@ public:
     bool isVisited(Coord x, Coord y) const
     {
         return m_grid[x + y * m_width].waveId == m_lastWaveId;
+    }
+
+    bool isVisited(const Node* node) const
+    {
+        return node->waveId == m_lastWaveId;
     }
 
     const Node* getNode(Coord x, Coord y) const
@@ -658,7 +676,7 @@ protected:
 
     /// ID of last search.
     uint32_t m_lastWaveId = 0;
-    };
+};
 
 struct EmptySearchPredicate
 {
@@ -723,12 +741,27 @@ struct GroupSearchPredicate
         }
     }
 
+    void setMainTarget(const Point2& pt)
+    {
+#ifdef MULTIWAVE_FIRST
+        centerId = grid.pointIndex(pt);
+#else
+        addTarget(pt);
+#endif
+    }
+
     bool isGoal(Node* node) const
     {
         auto id = grid.nodeIndex(node);
+        if (id == centerId)
+            centerId = -1;
         if (isMasked(id))
             hits++;
+#ifdef MULTIWAVE_FIRST
+        return hits > 0 && centerId == -1;
+#else
         return hits == targets.size();
+#endif
     }
 
     bool empty() const
@@ -740,6 +773,7 @@ struct GroupSearchPredicate
     int width = 0;
     std::vector<Point2> targets;
     std::vector<char> mask;
+    mutable int centerId = -1;
     mutable int hits = 0;
 };
 
@@ -836,11 +870,23 @@ public:
     int getMaxSteps() const
     {
         return m_numSteps;
-}
+    }
 
     int getRobotPrice() const
     {
         return m_robotPrice;
+    }
+
+    int dropRequests(int tick) {
+        assert(m_state == State::ParsedRequestsNumber);
+        int numOrders = 0;
+        char buffer[256] = {};
+        m_in.getline(buffer, 255);
+        //std::gets(buffer);
+        numOrders = atoi(buffer);
+        for (int i = 0; i < numOrders; i++)
+            m_in.getline(buffer, 255);
+        return 0;
     }
 
     /// Parses requests for a current step.
@@ -885,10 +931,12 @@ protected:
 class Dispatcher
 {
 public:
-    Dispatcher(Map& map)
+    Dispatcher(Map& map, const PClock::time_point& simStart)
         :m_search(map), m_groupPred(m_search), m_map(map)
     {
+        m_simStart = simStart;
 
+        m_simEndLimit = m_simStart + std::chrono::duration_cast<PClock::duration>(std::chrono::milliseconds(19500));
     }
 
     /// Process connectivity components in a map.
@@ -939,14 +987,17 @@ public:
     void calculateInitialPositions(int maxSteps, int maxOrders, int orderPrice, int robotPrice)
     {
         // Average time for delivery.
-        int avgTimeToDeliver = 2 * m_map.dimension;
+        int avgTimeToDeliver = 4 * m_map.dimension;
         int orderDelay = 60 * maxSteps / maxOrders;
 
         m_orderPrice = orderPrice;
         m_orders.reserve(maxOrders);
 
-        int needRobots = avgTimeToDeliver / orderDelay;
-        needRobots *= 2;
+        int needRobots = avgTimeToDeliver / orderDelay + 1;
+        if (4 * m_map.dimension > orderPrice)
+            needRobots *= 8;
+        else
+            needRobots *= 2;
         if (needRobots < 1)
             needRobots = 1;
         if (needRobots > 100)
@@ -971,12 +1022,11 @@ public:
             m_robots[i].pos = pos;
             assert(!m_map.isOccupied(pos.x, pos.y));
         }
+        m_inactiveRobots = m_robots.size();
     }
 
-    void processNewOrders(int added)
+    void registerNewOrders(int added)
     {
-        TargetSearchPredicate pred(m_search);
-
         for (size_t o = m_orders.size() - added; o < m_orders.size(); o++)
         {
             m_freeOrders.insert((int)o);
@@ -985,7 +1035,11 @@ public:
             m_sites[siteIndex].orders.insert((int)o);
             order.siteIndex = siteIndex;
         }
+    }
 
+    void processNewOrders()
+    {
+        TargetSearchPredicate pred(m_search);
         std::vector<int> robotCandidates;
         robotCandidates.reserve(m_robots.size());
         // Find best robots for this task.
@@ -1014,7 +1068,6 @@ public:
                 m_groupPred.addTarget(robot.pos);
                 robotCandidates.push_back(r);
             }
-            m_groupPred.addTarget(order->finish);
 
             if (robotCandidates.empty())
             {
@@ -1023,6 +1076,8 @@ public:
 #endif
                 break;
             }
+
+            m_groupPred.setMainTarget(order->finish);
 
             m_search.beginSearch();
             m_search.addNode(order->start.x, order->start.y, 0);
@@ -1037,35 +1092,50 @@ public:
             drawer.drawStarts({ order->start });
 #endif
             if (waveResult == SearchGrid::WaveResult::Collapsed)
-                throw std::runtime_error("Multiwave has collapsed");
-
-            m_search.tracePath(order->finish.x, order->finish.y, order->deliveryPath.points);
-            order->deliveryPath.reverse();
-
-            int nearestRobot = -1;
-            int nearestDistance = m_search.getWidth() * m_search.getWidth();
-            for (int r : robotCandidates)
             {
-                Robot& robot = m_robots[r];
-                const auto* node = m_search.getNode(robot.pos.x, robot.pos.y);
-                int distance = node->cost;
-                if (distance < nearestDistance || nearestRobot == -1)
-                {
-                    nearestRobot = r;
-                    nearestDistance = distance;
-                }
-            }
-
 #ifdef LOG_STDIO
-            std::cout << "Assigning task " << orderId << " to robot " << nearestRobot << std::endl;
+                std::cerr << "Unexpected collapse of the wave for task " << orderId << std::endl;
 #endif
-            auto& robot = m_robots[nearestRobot];
-            robot.sites.push_back(order->siteIndex);
-            m_search.tracePath(robot.pos.x, robot.pos.y, robot.approachPath.points);
+            }
+            else
+            {
+                m_search.tracePath(order->finish.x, order->finish.y, order->deliveryPath.points);
+                order->deliveryPath.reverse();
+
+                int nearestRobot = -1;
+                int nearestDistance = m_search.getWidth() * m_search.getWidth();
+                for (int r : robotCandidates)
+                {
+                    Robot& robot = m_robots[r];
+                    const auto* node = m_search.getNode(robot.pos.x, robot.pos.y);
+                    if (!m_search.isVisited(node))
+                        continue;
+                    int distance = node->cost;
+                    if (distance < nearestDistance || nearestRobot == -1)
+                    {
+                        nearestRobot = r;
+                        nearestDistance = distance;
+                    }
+                }
+
+                if (nearestRobot == -1)
+                {
+#ifdef LOG_STDIO
+                    std::cerr << "Wave for task " << orderId << " have not reached any robot" << std::endl;
+                    continue;
+#endif
+                }
+#ifdef LOG_STDIO
+                std::cout << "Assigning task " << orderId << " to robot " << nearestRobot << std::endl;
+#endif
+                auto& robot = m_robots[nearestRobot];
+                robot.sites.push_back(order->siteIndex);
+                m_search.tracePath(robot.pos.x, robot.pos.y, robot.approachPath.points);
 #ifdef LOG_SVG
-            drawer.drawPath(order->approachPath.points);
+                drawer.drawPath(robot.approachPath.points);
 #endif
-            assignedOrders.push_back(orderId);
+                assignedOrders.push_back(orderId);
+            }
         }
         for (auto orderId : assignedOrders)
             m_freeOrders.erase(orderId);
@@ -1090,6 +1160,7 @@ public:
                     robot.state = Robot::State::MovingStart;
                     robot.pathPosition = 0;
                     assert(robot.pos == robot.approachPath[0]);
+                    m_inactiveRobots--;
                 }
             }
 
@@ -1125,9 +1196,10 @@ public:
                     {
                         robot.commands[tick] = 'S';
                         robot.state = Robot::State::Idle;
-                    }
+                        m_inactiveRobots++;
                     }
                 }
+            }
             else if (robot.state == Robot::State::MovingFinish)
             {
                 int orderIndex = robot.order;
@@ -1146,6 +1218,7 @@ public:
                     assert(robot.pos == order->finish);
                     robot.state = Robot::State::Idle;
                     robot.order = -1;
+                    m_inactiveRobots++;
                     closeOrder(step, tick, orderIndex);
                 }
             }
@@ -1159,7 +1232,7 @@ public:
         uint64_t revenue = 0;
         if (latency < m_orderPrice)
         {
-            revenue = (m_orderPrice - latency);
+            revenue = (m_orderPrice - latency - 1);
         }
 
         m_revenue += revenue;
@@ -1179,14 +1252,134 @@ public:
         }
     }
 
+    void runStep(int step, int tasksAdded, bool halt)
+    {
+        registerNewOrders(tasksAdded);
+
+        if (!halt)
+            processNewOrders();
+
+        if (!halt || m_inactiveRobots > 0)
+        {
+            for (int tick = 0; tick < 60; tick++)
+            {
+                moveRobots(step, tick);
+                if (m_inactiveRobots > 0)
+                    processNewOrders();
+            }
+        }
+    }
+
+    // Process all calculation.
+    void runSimulation(ProblemParser& parser, bool hardTimeLimit)
+    {
+        processIslands();
+        calculateInitialPositions(parser.getMaxSteps(), parser.getMaxOrders(),
+            parser.getOrderPrice(), parser.getRobotPrice());
+        publishInitialPositions();
+
+        int hitIterations = -1;
+        constexpr int maxTimeMs = 10000;
+
+        // A first step when we start considering timeout.
+        int considerTimeoutStep = 2000;
+        int hitRevenue = 0;
+        int hitLoss = 0;
+        // Time-conserving mode when we read requests in a most simple way.
+        bool dropInput = false;
+        // Time-conserving mode when we stop all the robots.
+        bool haltRobots = false;
+
+        for (int step = 0; step < parser.getMaxSteps(); step++)
+        {
+            // Calculate paths for each new request.
+            int added = 0;
+            if (!dropInput)
+            {
+                auto readStart = PClock::now();
+                added = parser.parseStepRequests(m_orders, 60 * step);
+                m_readTime += (PClock::now() - readStart);
+            }
+            else
+            {
+                parser.dropRequests(60 * step);
+            }
+
+
+            int stepsLeft = parser.getMaxSteps() - step;
+            // Process tasks and them to robots.
+            runStep(step, added, haltRobots);
+            publishRobots();
+
+            auto now = Clock::now();
+            int passedMs = MS(m_simStart, now).count();
+            if (step > 1 && (passedMs > maxTimeMs || step > considerTimeoutStep))
+            {
+                if (hitIterations == -1)
+                {
+                    // Estimated time to publish all the data.
+                    auto estimatePublish = stepsLeft * m_publishTime / step;
+                    // Estimated time to read the rest of requests.
+                    auto estimateRead = stepsLeft * m_readTime / step;
+                    auto totalLeft = estimatePublish + estimateRead;
+                    //std::cout << "estimatePublish=" << MS(estimatePublish).count()
+                    //    << " estimateRead=" << MS(estimateRead).count() << std::endl;
+
+
+                    if (now + totalLeft > m_simEndLimit)
+                    {
+                        auto overtime = MS(now + totalLeft - m_simEndLimit);
+                        hitIterations = step;
+                        hitRevenue = m_revenue;
+                        hitLoss = m_revenueLoss;
+                        if (hardTimeLimit)
+                        {
+                            dropInput = true;
+                            haltRobots = true;
+#if LOG_STDIO
+                            std::cerr << "Enabling hard time limit at iteration " << hitIterations
+                                << " overtime=" << overtime.count() << std::endl;
+#endif
+                        }
+                        else
+                        {
+#if LOG_STDIO
+                            std::cerr << "Enabling soft time limit at iteration " << hitIterations
+                                << " overtime=" << overtime.count() << std::endl;
+#endif
+                    }
+                }
+            }
+        }
+        }
+
+        auto timeFinish = Clock::now();
+#ifdef LOG_STDIO
+        std::cout << "Done in " << MS(m_simStart, timeFinish).count() << "ms." << std::endl;
+        std::cout << "Revenue=" << m_revenue - m_parkCost << ". Loss=" << m_revenueLoss << std::endl;
+        if (hitIterations != -1)
+        {
+            std::cout << "Managed to process only " << hitIterations
+                << " steps out of " << parser.getMaxSteps()
+                << " (" << (100 * hitIterations / parser.getMaxSteps()) << "%)" << std::endl;
+
+            std::cout << "Limited revenue=" << hitRevenue - m_parkCost
+                << " limited loss=" << hitLoss << std::endl;
+    }
+#endif
+}
+
     /// Publish robot commands for last simulation minute.
     void publishRobots()
     {
+        auto start = PClock::now();
         for (auto& robot : m_robots)
         {
             puts(robot.commands);
             robot.clearCommands();
         }
+        auto delta = (PClock::now() - start);
+        m_publishTime += delta;
     }
 
 public:
@@ -1242,6 +1435,22 @@ protected:
     std::set<int> m_freeOrders;
 
     uint64_t m_orderPrice = 0;
+
+    // Number of inactive robots.
+    int m_inactiveRobots = 0;
+    // Number of robots which are finishing current task.
+    int m_finishingRobots = 0;
+    // Starting time point for simulation.
+    PClock::time_point m_simStart;
+    // Time point when we must finish all calculations.
+    PClock::time_point m_simEndLimit;
+
+    // Time spent on publishing data.
+    PClock::duration m_publishTime = {};
+    // Time spent on making steps.
+    PClock::duration m_stepTime = {};
+    // Time spent on reading requests.
+    PClock::duration m_readTime = {};
 };
 
 
@@ -1254,6 +1463,8 @@ int main(int argc, const char* argv[])
     ProblemParser parser(std::cin);
     Map map;
 
+    auto simStart = PClock::now();
+
     if (!parser.parseObstacleMap(map)) {
         std::cerr << "Failed to parse obstacle map" << std::endl;
         return -1;
@@ -1264,31 +1475,8 @@ int main(int argc, const char* argv[])
         return -1;
     }
 
-    auto timeStart = Clock::now();
-    int timeLimit = 18000;
-    Dispatcher dispatcher(map);
-    dispatcher.processIslands();
-    dispatcher.calculateInitialPositions(parser.getMaxSteps(), parser.getMaxOrders(),
-        parser.getOrderPrice(), parser.getRobotPrice());
-    dispatcher.publishInitialPositions();
-
-    for (int step = 0; step < parser.getMaxSteps(); step++)
-    {
-        // Calculate paths for each new request.
-        int added = parser.parseStepRequests(dispatcher.m_orders, 60 * step);
-
-        // Process tasks and them to robots.
-        auto current = Clock::now();
-        // Stop everyone if we are reaching time limit.
-        if (MS(timeStart, current).count() < timeLimit)
-        {
-            dispatcher.processNewOrders(added);
-
-            for (int tick = 0; tick < 60; tick++)
-                dispatcher.moveRobots(step, tick);
-        }
-        dispatcher.publishRobots();
-    }
+    Dispatcher dispatcher(map, simStart);
+    dispatcher.runSimulation(parser, true);
     return 0;
 }
 
