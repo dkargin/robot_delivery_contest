@@ -276,6 +276,11 @@ public:
         return Point2(index % m_width, index / m_width);
     }
 
+    NodeID pointIndex(const Point2& pt) const
+    {
+        return pt.x + pt.y * m_width;
+    }
+
     bool isOccupied(Coord x, Coord y) const
     {
         return m_map.isOccupied(x, y);
@@ -284,6 +289,11 @@ public:
     bool isVisited(Coord x, Coord y) const
     {
         return m_grid[x + y * m_width].waveId == m_lastWaveId;
+    }
+
+    bool isVisited(const Node* node) const
+    {
+        return node->waveId == m_lastWaveId;
     }
 
     const Node* getNode(Coord x, Coord y) const
@@ -484,12 +494,27 @@ struct GroupSearchPredicate
         }
     }
 
+    void setMainTarget(const Point2& pt)
+    {
+#ifdef MULTIWAVE_FIRST
+        centerId = grid.pointIndex(pt);
+#else
+        addTarget(pt);
+#endif
+    }
+
     bool isGoal(Node* node) const
     {
         auto id = grid.nodeIndex(node);
+        if (id == centerId)
+            centerId = -1;
         if (isMasked(id))
             hits++;
+#ifdef MULTIWAVE_FIRST
+        return hits > 0 && centerId == -1;
+#else
         return hits == targets.size();
+#endif
     }
 
     bool empty() const
@@ -501,5 +526,6 @@ struct GroupSearchPredicate
     int width = 0;
     std::vector<Point2> targets;
     std::vector<char> mask;
+    mutable int centerId = -1;
     mutable int hits = 0;
 };

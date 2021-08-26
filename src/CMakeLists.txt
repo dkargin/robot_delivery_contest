@@ -1,7 +1,7 @@
 add_executable(robot_dispatcher
 	pathfinder.h
 	dispatcher.h
-	dispatcher.cpp
+	main.cpp
 	svg.h
 	svg.cpp
 	draw.h

@@ -10,11 +10,18 @@
 #include <algorithm>
 
 using Clock = std::chrono::steady_clock;
+using PClock = Clock;// std::chrono::high_resolution_clock;
 using Duration = std::chrono::milliseconds;
 
 inline auto MS(const Clock::time_point& from, const Clock::time_point& to)
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(to - from);
+}
+
+template <class _Rep, class _Period>
+inline auto MS(const std::chrono::duration<_Rep, _Period>& duration)
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration);
 }
 
 /// A single row in a compact occupancy map.

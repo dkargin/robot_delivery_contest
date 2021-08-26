@@ -97,3 +97,71 @@ Managed to process only 31335 steps out of 100000 (31%)
 ```
 
 We've managed to 
+
+# Reassigning tasks on fly #
+
+```
+Generated island with 16 elements
+Avg order delay = 60. Avg delivery time = 8 steps. Need 1 robots
+Max revenue = 140, expected revenue = 74
+1
+1 4
+Assigning task 0 to robot 0
+Order 0 is closed. Revenue =10, loss=10
+LLLTRDDRRDPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 1 to robot 0
+Order 1 is closed. Revenue =10, loss=10
+UUUTLDDLLDPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 2 to robot 0
+Order 2 is closed. Revenue =10, loss=10
+RRRTULLUULPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 3 to robot 0
+No free candidates for task 4
+Order 3 is closed. Revenue =13, loss=7
+RTDDRDRPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 4 to robot 0
+No free candidates for task 5
+Order 4 is closed. Revenue =0, loss=67
+ULULTRDPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 5 to robot 0
+No free candidates for task 6
+Order 5 is closed. Revenue =0, loss=129
+LULTRDRRDPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Done in 26ms.
+Revenue=33. Loss=233
+```
+
+```
+Generated island with 16 elements
+Avg order delay = 60. Avg delivery time = 8 steps. Need 1 robots
+Max revenue = 140, expected revenue = 74
+1
+1 4
+Assigning task 0 to robot 0
+Order 0 is closed. Revenue =10, loss=10
+LLLTRDDRRDPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 1 to robot 0
+Order 1 is closed. Revenue =10, loss=10
+UUUTLDDLLDPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 2 to robot 0
+Order 2 is closed. Revenue =10, loss=10
+RRRTULLUULPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Assigning task 3 to robot 0
+No free candidates for task 4
+Order 3 is closed. Revenue =13, loss=7
+Assigning task 4 to robot 0
+No free candidates for task 5
+Order 4 is closed. Revenue =5, loss=15
+Assigning task 5 to robot 0
+No free candidates for task 6
+Order 5 is closed. Revenue =0, loss=25
+Assigning task 6 to robot 0
+Order 6 is closed. Revenue =0, loss=35
+RTDDRDRPULULTRDPLULTRDRRDPULULTRDRDPSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+Done in 40ms.
+Revenue=38. Loss=112
+```
