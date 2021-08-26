@@ -221,6 +221,8 @@ struct Map
 
     int dimension = 0;
 
+    Point2 anyFreePoint = { -1, -1 };
+
     /// Returns an index of a tile (x, y)
     int index(Coord x, Coord y) const
     {
@@ -849,7 +851,14 @@ public:
                     map.numObstacles++;
                 }
                 else if (row[c] == '.')
+                {
                     occupancyRow[c] = false;
+                    if (map.anyFreePoint.x == -1)
+                    {
+                        map.anyFreePoint.x = c;
+                        map.anyFreePoint.y = r;
+                    }
+                }
                 else {
                     std::cerr << "Unexpected occupancy code at row=" << r <<
                         " col=" << c << std::endl;
@@ -906,8 +915,7 @@ public:
         m_in >> numOrders;
         for (int i = 0; i < numOrders; i++)
         {
-            //std::fgets(buffer);
-            m_in.getline(buffer, 255);
+            m_in.getline(buffer, 255, '\n');
         }
         return 0;
     }
@@ -956,6 +964,9 @@ class Dispatcher
 public:
     int m_maxRobots = 100;
     int m_minRobots = 1;
+    bool m_processRobots = true;
+    bool m_processMap = true;
+    Point2 m_anyFreePoint;
 
     Dispatcher(Map& map, const PClock::time_point& simStart)
         :m_search(map), m_groupPred(m_search), m_map(map)
@@ -968,6 +979,8 @@ public:
     /// Process connectivity components in a map.
     void processIslands()
     {
+        if (!m_processMap)
+            return;
         m_map.bakeOccupancy();
         // Indexes of available tiles.
         std::set<int> availableTiles;
@@ -1249,6 +1262,7 @@ public:
                     }
                     else
                     {
+                        // Site has become empty for some reason.
                         robot.commands[tick] = 'S';
                         robot.state = Robot::State::Idle;
                         m_inactiveRobots++;
@@ -1313,10 +1327,12 @@ public:
             {
                 revenue = (m_orderPrice - latency - 1);
             }
+            m_doneOrders++;
         }
         else
         {
             m_revenueLoss += m_orderPrice;
+            m_droppedOrders++;
         }
 
         m_revenue += revenue;
@@ -1344,20 +1360,31 @@ public:
         }
     }
 
-    void runStep(int step, int tasksAdded, bool halt)
+    enum class RunLevel
     {
-        registerNewOrders(tasksAdded);
+        Full,
+        Finish,
+        Halt
+    };
 
-        if (!halt)
-            processNewOrders(step, 0);
-
-        if (!halt || m_inactiveRobots > 0)
+    void runStep(int step, int tasksAdded, RunLevel runLevel)
+    {
+        if (runLevel == RunLevel::Full)
         {
-            for (int tick = 0; tick < 60; tick++)
+            registerNewOrders(tasksAdded);
+            processNewOrders(step, 0);
+        }
+
+        if (runLevel != RunLevel::Halt)
+        {
+            if (m_inactiveRobots > 0)
             {
-                moveRobots(step, tick);
-                if (m_inactiveRobots > 0)
-                    processNewOrders(step, tick);
+                for (int tick = 0; tick < 60; tick++)
+                {
+                    moveRobots(step, tick);
+                    if (m_inactiveRobots > 0)
+                        processNewOrders(step, tick);
+                }
             }
         }
     }
@@ -1380,27 +1407,28 @@ public:
         // Time-conserving mode when we read requests in a most simple way.
         bool dropInput = false;
         // Time-conserving mode when we stop all the robots.
-        bool haltRobots = false;
+        RunLevel runLevel = RunLevel::Full;
+        if (!m_processRobots)
+            runLevel = RunLevel::Halt;
 
         for (int step = 0; step < parser.getMaxSteps(); step++)
         {
             // Calculate paths for each new request.
             int added = 0;
-            //if (!dropInput)
+            if (!dropInput)
             {
                 auto readStart = PClock::now();
                 added = parser.parseStepRequests(m_orders, 60 * step);
                 m_readTime += (PClock::now() - readStart);
-            }/*
+            }
             else
             {
                 parser.dropRequests(60*step);
-            }*/
-            
+            }
 
             int stepsLeft = parser.getMaxSteps() - step;
             // Process tasks and them to robots.
-            runStep(step, added, haltRobots);
+            runStep(step, added, runLevel);
             publishRobots();
 
             auto now = PClock::now();
@@ -1410,12 +1438,10 @@ public:
                 if (hitIterations == -1)
                 {
                     // Estimated time to publish all the data.
-                    auto estimatePublish = stepsLeft * m_publishTime / step;
+                    auto estimatePublish = 2*stepsLeft * m_publishTime / step;
                     // Estimated time to read the rest of requests.
                     auto estimateRead = stepsLeft * m_readTime / step;
                     auto totalLeft = estimatePublish + estimateRead;
-                    //std::cout << "estimatePublish=" << MS(estimatePublish).count()
-                    //    << " estimateRead=" << MS(estimateRead).count() << std::endl;
 
                     if (now + totalLeft > m_simEndLimit)
                     {
@@ -1425,8 +1451,8 @@ public:
                         hitLoss = m_revenueLoss;
                         if (hardTimeLimit)
                         {
-                            dropInput = true;
-                            haltRobots = true;
+                            dropInput = false;
+                            RunLevel runLevel = RunLevel::Finish;
 #if LOG_STDIO
                             std::cerr << "Enabling hard time limit at iteration " << hitIterations
                                 <<" overtime=" << overtime.count() << "ms" << std::endl;
@@ -1447,7 +1473,11 @@ public:
         auto timeFinish = PClock::now();
 #ifdef LOG_STDIO
         std::cout << "Done in " << MS(m_simStart, timeFinish).count() << "ms." << std::endl;
-        std::cout << "Revenue=" << m_revenue - m_parkCost << ". Loss=" << m_revenueLoss << std::endl;
+        std::cout << "Revenue=" << m_revenue - m_parkCost
+            << " loss=" << m_revenueLoss
+            << " parkPrice=" << m_parkCost
+            << " done=" << m_doneOrders
+            << " dropped=" << m_droppedOrders << std::endl;
         if (hitIterations != -1)
         {
             std::cout << "Managed to process only " << hitIterations
@@ -1533,6 +1563,10 @@ protected:
     int m_finishingRobots = 0;
 
     int m_maxPathCost = 0;
+
+    int m_droppedOrders = 0;
+    int m_doneOrders = 0;
+
     // Starting time point for simulation.
     PClock::time_point m_simStart;
     // Time point when we must finish all calculations.

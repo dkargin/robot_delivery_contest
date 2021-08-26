@@ -165,3 +165,17 @@ SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
 Done in 40ms.
 Revenue=38. Loss=112
 ```
+
+
+```
+1	ok	3ms / 160.00Kb	-
+2	ok	10ms / 1.23Mb	-
+3	ok	37ms / 1.35Mb	-
+4	ok	0.759s / 7.55Mb	-
+5	ok	1.627s / 33.24Mb	-
+6	ok	327ms / 21.40Mb	-
+7	ok	1.13s / 21.40Mb	-
+8	ok	1.445s / 21.40Mb	-
+9	ok	4.009s / 49.62Mb	-
+10	ok	4.034s / 57.26Mb
+```
